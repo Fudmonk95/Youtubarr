@@ -1,0 +1,15 @@
+.git
+.github
+.env
+config
+library
+cache
+.pytest_cache
+.ruff_cache
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.log
+*.zip
