@@ -1,0 +1,52 @@
+services:
+
+  youtubarr:
+    container_name: youtubarr
+    image: ghcr.io/fudmonk95/youtubarr:latest
+    restart: unless-stopped
+    stop_grace_period: 30s
+    init: true
+
+    environment:
+      TZ: Europe/London
+      PUID: "1001"
+      PGID: "1001"
+      YOUTUBARR_LOG_LEVEL: INFO
+      YOUTUBARR_MAX_VIDEO_HEIGHT: "1080"
+      YOUTUBARR_CACHE_MAX_GB: "20"
+      YOUTUBARR_CACHE_TTL_HOURS: "24"
+
+    volumes:
+      - /mnt/appdata/Youtubarr/config:/config
+      - /mnt/appdata/Youtubarr/library:/library
+      - /mnt/appdata/Youtubarr/cache:/cache
+
+      # Youtubarr creates its FUSE filesystem inside this single container.
+      # rshared propagates the nested FUSE mount back to the Debian/LXC host.
+      - type: bind
+        source: /mnt/youtubarr
+        target: /mnt/youtubarr
+        bind:
+          propagation: rshared
+
+    ports:
+      - "8788:8788"
+
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+
+    cap_add:
+      - SYS_ADMIN
+
+    security_opt:
+      - apparmor:unconfined
+
+    networks:
+      - dumb-live-network
+
+
+networks:
+
+  dumb-live-network:
+    external: true
+    name: dumb-live_default
