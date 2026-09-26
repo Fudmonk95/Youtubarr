@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare Youtubarr shared FUSE bind mount
+After=local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/youtubarr/.env
+ExecStart=/opt/youtubarr/scripts/prepare-mount.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
