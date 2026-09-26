@@ -11,6 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     YOUTUBARR_HOST=0.0.0.0 \
     YOUTUBARR_PORT=8788
 
+LABEL org.opencontainers.image.title="Youtubarr" \
+      org.opencontainers.image.description="Arr-style YouTube acquisition for Series, Music and optional Movies" \
+      org.opencontainers.image.source="https://github.com/Fudmonk95/Youtubarr" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.licenses="GPL-3.0"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg fuse3 libfuse2 util-linux curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/* \
