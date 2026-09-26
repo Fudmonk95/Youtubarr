@@ -5,7 +5,6 @@ services:
     image: ghcr.io/fudmonk95/youtubarr:latest
     restart: unless-stopped
     stop_grace_period: 30s
-    init: true
 
     environment:
       TZ: Europe/London
