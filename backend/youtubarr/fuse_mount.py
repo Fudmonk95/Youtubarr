@@ -97,12 +97,19 @@ def main() -> None:
             return {"f_bsize": 4096, "f_frsize": 4096, "f_blocks": 0, "f_bfree": 0, "f_bavail": 0, "f_files": 1000000, "f_ffree": 1000000, "f_namemax": 255}
 
     settings.virtual_mount.mkdir(parents=True, exist_ok=True)
+
+    # The host preparation deliberately leaves a marker file in the backing
+    # shared bind mount.  FUSE normally refuses to mount on a non-empty
+    # directory, so explicitly allow this known deployment model.  The marker
+    # remains hidden while the Youtubarr FUSE filesystem is mounted and becomes
+    # visible again when the container/FUSE process stops.
     FUSE(
         YoutubarrFS(),
         str(settings.virtual_mount),
         foreground=True,
         ro=True,
         allow_other=True,
+        nonempty=True,
         nothreads=False,
         attr_timeout=1,
         entry_timeout=1,
