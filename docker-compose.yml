@@ -6,7 +6,6 @@ services:
     image: youtubarr:1.0.0
     container_name: youtubarr
     restart: unless-stopped
-    init: true
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${YOUTUBARR_PORT:-8788}:8788"
     environment:
