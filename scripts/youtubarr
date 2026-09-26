@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+case "${1:-}" in
+  up) shift; exec docker compose up -d --build "$@" ;;
+  down) shift; exec docker compose down "$@" ;;
+  restart) shift; docker compose down; exec docker compose up -d --build "$@" ;;
+  logs) shift; exec docker compose logs -f "$@" ;;
+  status|ps) shift; exec docker compose ps "$@" ;;
+  doctor) shift; exec "$ROOT/scripts/doctor.sh" "$@" ;;
+  *) echo "Usage: $0 {up|down|restart|logs|status|doctor}" >&2; exit 2 ;;
+esac
