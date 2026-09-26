@@ -1,862 +1,407 @@
-# Youtubarr v1.0.0
+# Youtubarr
 
-<p align="center">
-  <img src="backend/youtubarr/web/assets/logo.svg" alt="Youtubarr" width="420">
-</p>
+**YouTube acquisition for an Arr-managed media library.**
 
-<p align="center"><strong>YouTube, in your media library.</strong></p>
+Youtubarr is a self-hosted companion for **Sonarr**, **Lidarr** and optional **Radarr**. It is designed to look and operate like another application in the Arr family while using YouTube as an additional source for media that is difficult to obtain through normal torrent or Usenet workflows.
 
-Youtubarr is a self-hosted Arr-style application for using YouTube as an additional source for hard-to-find **TV episodes and music**, while keeping **Sonarr and Lidarr as the metadata source of truth**. Optional movie support is available through Radarr and is disabled by default.
+The interface deliberately follows the familiar Arr information architecture: poster libraries, `Add New`, `Library Import`, `Calendar`, `Activity`, `Wanted`, Arr-style settings pages, root mappings, queues, history and system status. The visual identity is different on purpose: **YouTube red** is used for the top/action chrome and Youtubarr branding.
 
-Youtubarr is designed to sit beside Sonarr, Radarr and Lidarr rather than replace them. It uses an Arr-style layout with a dark navigation/header area, light content panels, compact tables and **YouTube-red** branding.
-
-> **v1 is a clean rebuild.** It is not the old 0.2 alpha application repackaged. The deployment model, setup flow, UI and virtual-media architecture were rebuilt around a **single-container FUSE design**.
-
----
+> Youtubarr does not replace Sonarr, Lidarr or Radarr. Those applications remain the source of truth for media identity, metadata, monitoring state, seasons, episodes, albums, tracks, filenames and library paths.
 
 ## What Youtubarr is for
 
-Youtubarr exists for media that is difficult or impossible to source through normal torrent/NZB workflows but is available legitimately on YouTube: old TV, regional programmes, archive material, music, concerts, obscure releases and similar media.
+Youtubarr is aimed mainly at **older television series and music** that are already known to Sonarr or Lidarr but are difficult to source elsewhere. Movies are optional and disabled by default.
 
-The important design choice is that **Youtubarr does not try to become another Sonarr, Lidarr or Radarr**. Those applications remain responsible for canonical metadata, titles, seasons, episodes, albums, tracks, monitoring and library identity. Youtubarr asks those services what the media is and where it belongs, then provides an additional YouTube acquisition path.
-
-### Primary modules
-
-- **Series** — enabled by default and powered by Sonarr.
-- **Music** — enabled by default and powered by Lidarr.
-- **Movies** — optional, disabled by default and powered by Radarr.
-
-If Movies is disabled, Radarr is not required and the Movies section is not shown in the normal Youtubarr navigation.
-
----
-
-## Key features
-
-- Arr-style web interface with YouTube-red Youtubarr branding.
-- First-run wizard — there are no factory credentials.
-- Create the first administrator account on first launch.
-- Connect Sonarr, Lidarr and optional Radarr using their normal API URLs and API keys.
-- Automatic Arr root discovery.
-- One-to-one writable root mapping under `/library`.
-- Longest/deepest matching Arr root wins when an item is placed.
-- Interactive YouTube search through `yt-dlp`.
-- YouTube playlist import.
-- Playlist-order mapping to a Sonarr season or Lidarr album.
-- **Virtual Symlink** acquisition is the default design.
-- Real Linux symlinks are created in the exported library.
-- Virtual files are exposed through FUSE at `/mnt/youtubarr`.
-- Progressive MP4 virtual reads.
-- Split video/audio YouTube streams handled with ffmpeg remux into a bounded disposable cache.
-- M4A virtual-audio support for music.
-- One Docker Compose service and **one Youtubarr container**.
-- Built-in System Status page.
-- Host-side `doctor.sh` diagnostics.
-- Designed to coexist with DUMB-hosted Arr services and Zurg without modifying Zurg.
-- Persistent configuration/database under `/config`.
-- Persistent exported symlink library under `/library`.
-
----
-
-## How this differs from the other projects supplied during development
-
-The other projects are useful, but they solve different problems. This comparison is based on the versions/code supplied while Youtubarr v1 was being designed.
-
-| Capability | **Youtubarr v1** | **yt2radarr** | **Other supplied Youtubarr / Lidarr bridge** |
-|---|---|---|---|
-| Main focus | TV + music, optional movies | Radarr-oriented YouTube acquisition | YouTube playlist/Lidarr workflow |
-| Metadata authority | Sonarr / Lidarr / optional Radarr | Radarr with optional Sonarr-related workflow | Lidarr-oriented |
-| Normal media behaviour | Virtual symlink/FUSE | Local media download/import workflow | Import-list/playlist workflow |
-| Full media permanently stored by default | **No** | **Yes in its normal download flow** | Not the same virtual-media design |
-| TV season/episode workflow | **Yes** | More limited than Youtubarr's Sonarr-first model | No equivalent full TV workflow |
-| Music/Lidarr workflow | **Yes** | Not its main purpose | **Yes** |
-| Optional Radarr movie mode | **Yes** | **Yes / primary use** | No |
-| Playlist order → season episodes | **Yes** | No equivalent workflow in the supplied version | No |
-| Playlist order → album tracks | **Yes** | No | Playlist/Lidarr oriented |
-| Arr-style application UI | **Yes** | Different UI | Different UI |
-| FUSE virtual filesystem | **Yes** | No | No |
-| Single Youtubarr container | **Yes** | Application-specific deployment | Supplied project used additional application components |
-
-In practical terms, **yt2radarr** is closer to a downloader/import helper: choose a Radarr item, acquire the source, rename it and place a resulting file where the media library expects it. That is useful when you explicitly want a permanent local media file.
-
-The other supplied **Youtubarr** project is primarily a YouTube/Lidarr playlist integration. It is not trying to provide the Sonarr-style TV acquisition and FUSE-backed virtual-file design used here.
-
-**This Youtubarr v1** behaves more like another member of the Arr stack: it asks Sonarr/Lidarr/Radarr what the target media is, maps that target into a writable Youtubarr library and exposes YouTube media through real Linux symlinks backed by Youtubarr's own virtual filesystem.
-
----
-
-# Architecture
-
-There is exactly **one Compose service and one Youtubarr container**.
+Typical workflow:
 
 ```text
-                              ┌─────────────────────────────────────────┐
-                              │           Youtubarr container           │
-                              │                                         │
-Browser ─────────────────────►│ FastAPI + Arr-style web UI             │
-Sonarr / Lidarr / Radarr ────►│ Arr API integration                    │
-YouTube ─────────────────────►│ yt-dlp resolver                        │
-                              │ ffmpeg split-stream remux              │
-                              │ FUSE virtual filesystem                │
-                              └──────────────────┬──────────────────────┘
-                                                 │ rshared bind
-                                                 ▼
-                                          /mnt/youtubarr
-                                                 ▲
-                                                 │ absolute symlink
-                 /library/tv/.../Episode.mp4 ────┤
-                 /library/music/.../Track.m4a ───┘
+Sonarr says S01E03 is missing
+        ↓
+Youtubarr reads the Sonarr metadata
+        ↓
+Interactive YouTube search / playlist mapping
+        ↓
+Choose a suitable YouTube source
+        ↓
+Youtubarr creates a virtual media asset through FUSE
+        ↓
+A normal Linux symlink is placed in the mapped Youtubarr library
+        ↓
+Jellyfin / Sonarr / Lidarr can access the media through the shared mount
 ```
 
-The FUSE daemon is a second **process inside the same container**, not a second container or sidecar.
+Youtubarr supports both common YouTube delivery patterns:
 
-Your Portainer stack should therefore show one container only:
+- a progressive stream containing video and audio;
+- separate video and audio streams, remuxed with `ffmpeg` into a bounded transient cache when required;
+- audio-focused sources for Lidarr/music;
+- seekable byte-range reads through the FUSE filesystem;
+- Linux symlink library entries rather than permanent duplicate media downloads.
+
+## What is different from the other YouTube/Arr projects
+
+Several existing community projects, including the supplied `yt2radarr` and other Youtubarr-style builds, helped demonstrate that YouTube can be bridged into an Arr workflow. This project is intentionally broader in scope.
+
+Youtubarr is designed around these goals:
+
+- **Arr-style application rather than a downloader wrapper.** The main UI follows Sonarr/Lidarr navigation and workflow patterns.
+- **Series and music are first-class.** Sonarr and Lidarr are both core integrations.
+- **Movies are optional.** The Movies navigation and Radarr setup are hidden when the feature is disabled.
+- **Arr metadata remains authoritative.** Youtubarr does not build a competing metadata database for shows, episodes, artists or albums.
+- **Wanted workflow.** Missing and Cutoff Unmet views come from the connected Arr application.
+- **Activity workflow.** Queue, History and Blocklist expose Youtubarr acquisitions in an Arr-like layout.
+- **Playlist mapping.** A YouTube playlist can be associated with a Sonarr season or Lidarr album even when the video titles are unhelpful (`Episode 1`, `Episode 2`, and so on).
+- **Virtual filesystem delivery.** The target architecture is a single Youtubarr container running the API, UI, resolver, ffmpeg and FUSE process together.
+- **Persistent symlink library.** Library entries point into the Youtubarr virtual mount and can be exposed to Jellyfin and the Arr applications.
+- **Portainer-first deployment.** The published GHCR image can be deployed from the normal Portainer Web Editor without cloning/building the repository on the server.
+
+## Interface
+
+The Youtubarr v1 interface follows the same navigation model used by Sonarr/Lidarr, with YouTube-red branding.
+
+### Series
 
 ```text
-youtubarr
+Series
+├─ Add New
+└─ Library Import
 ```
 
-If you see a separate `youtubarr-fuse` container, that is the old alpha deployment and it should not be deployed alongside v1.
+The Series page supports an Arr-style poster grid and toolbar actions such as:
+
+- Update Filtered
+- RSS Sync
+- Select Series
+- Test Parsing
+- Options
+- View
+- Sort
+- Filter
+
+Series and episode information is loaded from Sonarr, including available poster metadata where Sonarr exposes it.
+
+### Activity
+
+```text
+Activity
+├─ Queue
+├─ History
+└─ Blocklist
+```
+
+### Wanted
+
+```text
+Wanted
+├─ Missing
+└─ Cutoff Unmet
+```
+
+Wanted rows are obtained from the appropriate Arr API and can be handed to Youtubarr's interactive YouTube search.
+
+### Settings
+
+```text
+Settings
+├─ Media Management
+├─ Profiles
+├─ Quality
+├─ Custom Formats
+├─ Indexers
+├─ Download Clients
+├─ Import Lists
+├─ Connect
+├─ Metadata
+├─ Metadata Source
+├─ Tags
+├─ General
+└─ UI
+```
+
+Youtubarr does not pretend to own settings that properly belong to Sonarr/Lidarr/Radarr. Where appropriate, these pages explain or expose the Youtubarr equivalent while retaining the familiar Arr layout.
+
+### System
+
+```text
+System
+├─ Status
+├─ Tasks
+├─ Logs
+├─ Updates
+└─ Backup
+```
 
 ---
 
-# Virtual Symlink design
+# Recommended deployment: Portainer Web Editor
 
-## TV example
+The recommended installation method is:
 
-```text
-/library/tv/kids/Jeopardy (2002)/Season 01/
-  Jeopardy (2002) - S01E01 - Pilot.mp4
-        │
-        └── Linux symlink ──► /mnt/youtubarr/tv/<asset-id>.mp4
-                                      │
-                                      └── Youtubarr FUSE ──► YouTube
-```
+**Portainer → Stacks → Add stack → Web editor → paste Compose → Deploy the stack**
 
-## Music example
+Portainer does **not** need to clone this repository and does **not** need to build Youtubarr locally. GitHub Actions publishes the image to:
 
 ```text
-/library/music/main/Artist/Album/01 - Track.m4a
-        │
-        └── Linux symlink ──► /mnt/youtubarr/music/<asset-id>.m4a
-                                      │
-                                      └── Youtubarr FUSE ──► YouTube
+ghcr.io/fudmonk95/youtubarr:latest
 ```
 
-The symlink is permanent library metadata. The full YouTube media file is **not** permanently stored in Virtual Symlink mode.
+Youtubarr runs as **one stack and one container**.
 
-### Split video/audio sources
-
-Many normal YouTube videos expose video and audio as separate streams. Youtubarr can resolve a compatible video stream and audio stream and remux them with ffmpeg into a **bounded transient cache** so the virtual file has stable seekable behaviour.
-
-The cache is disposable. It is not the library.
-
-Default limits:
-
-```env
-YOUTUBARR_CACHE_MAX_GB=20
-YOUTUBARR_CACHE_TTL_HOURS=24
+```text
+Youtubarr container
+├─ FastAPI backend
+├─ Arr integrations
+├─ web UI
+├─ yt-dlp
+├─ ffmpeg / ffprobe
+├─ acquisition worker
+└─ FUSE filesystem
 ```
 
----
+There is no Youtubarr FUSE sidecar container.
 
-# Requirements
+## Requirements
 
-- Linux Docker host.
-- Docker Engine with Compose v2.
-- `/dev/fuse` available to Docker.
-- Ability to use the `SYS_ADMIN` capability for the Youtubarr container.
-- A writable host path for Youtubarr config.
-- A writable host path for the Youtubarr exported library.
-- Sonarr for Series mode.
-- Lidarr for Music mode.
-- Radarr only when Movies mode is enabled.
+The Docker host must provide:
 
-The image includes the Python runtime, FastAPI/Uvicorn, `yt-dlp`, ffmpeg/ffprobe and FUSE3/fusepy.
+- Docker / Portainer;
+- `/dev/fuse`;
+- permission for the container to use FUSE (`SYS_ADMIN` and unconfined AppArmor in the supplied Compose);
+- a host mount point at `/mnt/youtubarr` with **shared mount propagation**;
+- persistent directories for configuration, generated library symlinks and transient cache;
+- network connectivity to Sonarr and Lidarr, and optionally Radarr.
 
-A Google YouTube Data API key is not required for the normal yt-dlp search/acquisition path.
+The supplied setup uses:
 
----
+```text
+/mnt/appdata/Youtubarr/config
+/mnt/appdata/Youtubarr/library
+/mnt/appdata/Youtubarr/cache
+/mnt/youtubarr
+```
 
-# Proxmox LXC prerequisite
+## 1. Prepare persistent directories
 
-If Docker is running inside a Proxmox LXC, `/dev/fuse` must be visible **inside that LXC** before Youtubarr can work.
-
-Inside the Debian LXC / Docker host:
+On the Debian/Docker host:
 
 ```bash
-ls -l /dev/fuse
+mkdir -p /mnt/appdata/Youtubarr/{config,library,cache}
+chown -R 1001:1001 /mnt/appdata/Youtubarr
 ```
 
-If `/dev/fuse` does not exist, the LXC must be configured from the **Proxmox host** first.
+Adjust PUID/PGID if your environment uses a different account.
 
-> `pct` commands are Proxmox-host commands. They do **not** run inside the Debian LXC.
+## 2. Prepare `/mnt/youtubarr` for FUSE propagation
 
-Youtubarr does not attempt to alter the outer Proxmox host from inside a container. Once `/dev/fuse` exists in the Docker host/LXC, the Youtubarr host installer handles the remaining mount preparation.
+The host path must be a shared mount so the nested FUSE filesystem created by the container is visible back on the host.
 
----
-
-# Recommended deployment: GitHub + Portainer
-
-The repository contains one `docker-compose.yml` and one service. Portainer can pull/build the repository directly, but the host-side FUSE/shared-mount preparation still has to be run on the Docker host once.
-
-## 1. Clone the repository on the Docker host
-
-```bash
-sudo git clone https://github.com/Fudmonk95/Youtubarr.git /opt/youtubarr
-cd /opt/youtubarr
-```
-
-If `/opt/youtubarr` already contains an older clone:
+The repository contains host-preparation helpers under `scripts/`. When the repository is available at `/opt/youtubarr`:
 
 ```bash
 cd /opt/youtubarr
-git pull
+chmod +x scripts/*.sh
+./scripts/install-host.sh
 ```
 
-## 2. Prepare the Docker host
-
-```bash
-cd /opt/youtubarr
-sudo ./scripts/install-host.sh
-```
-
-The installer:
-
-- verifies `/dev/fuse`;
-- prepares `/mnt/youtubarr` as Youtubarr's dedicated shared bind mount;
-- refuses to replace an unrelated mount;
-- never modifies Zurg mounts;
-- installs `youtubarr-mount.service`;
-- enables the preparation service at boot;
-- creates `/opt/youtubarr/.env` from `.env.example` when required;
-- remains safe to run again.
-
-Check the host preparation:
+Verify:
 
 ```bash
 systemctl status youtubarr-mount.service --no-pager
-findmnt -o TARGET,SOURCE,FSTYPE,PROPAGATION /mnt/youtubarr
+findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS,PROPAGATION /mnt/youtubarr
 ```
 
-## 3. Create persistent host folders
+Before the Youtubarr container starts, the important result is:
 
-For Portainer, absolute host paths are recommended:
-
-```bash
-sudo mkdir -p /opt/youtubarr-data/config
-sudo mkdir -p /opt/youtubarr-data/library
-sudo mkdir -p /opt/youtubarr-data/cache
+```text
+/mnt/youtubarr ... ext4 ... shared
 ```
 
-Set ownership to the PUID/PGID you intend to use. Check your IDs with:
+After Youtubarr starts, there should be a FUSE layer above it:
 
-```bash
-id
+```text
+/mnt/youtubarr ... ext4         shared
+/mnt/youtubarr YoutubarrFS fuse shared
 ```
 
-Example for UID/GID 1000:
+Do not create a separate FUSE container.
 
-```bash
-sudo chown -R 1000:1000 /opt/youtubarr-data
-```
-
-## 4. Create the Portainer Git stack
+## 3. Portainer stack
 
 In Portainer:
 
 1. Open **Stacks**.
-2. Select **Add stack**.
-3. Name the stack `youtubarr`.
-4. Select **Repository / Git repository**.
-5. Repository URL:
-
-   ```text
-   https://github.com/Fudmonk95/Youtubarr.git
-   ```
-
-6. Repository reference:
-
-   ```text
-   refs/heads/main
-   ```
-
-7. Compose path:
-
-   ```text
-   docker-compose.yml
-   ```
-
-8. Add the environment variables below.
-9. Deploy the stack.
-
-### Recommended Portainer variables
-
-```env
-TZ=Europe/London
-PUID=1000
-PGID=1000
-YOUTUBARR_PORT=8788
-BIND_ADDRESS=0.0.0.0
-YOUTUBARR_CONFIG_DIR=/opt/youtubarr-data/config
-YOUTUBARR_LIBRARY_DIR=/opt/youtubarr-data/library
-YOUTUBARR_CACHE_DIR=/opt/youtubarr-data/cache
-YOUTUBARR_MOUNT_DIR=/mnt/youtubarr
-YOUTUBARR_MAX_VIDEO_HEIGHT=1080
-YOUTUBARR_CACHE_MAX_GB=20
-YOUTUBARR_CACHE_TTL_HOURS=24
-YOUTUBARR_LOG_LEVEL=INFO
-```
-
-Change PUID/PGID and host storage paths for your own server.
-
-## 5. Confirm Portainer created one container
-
-Expected:
-
-```text
-youtubarr
-```
-
-Not expected:
-
-```text
-youtubarr-fuse
-```
-
-The FUSE daemon runs inside the same Youtubarr container.
-
-## 6. Open Youtubarr
-
-```text
-http://YOUR-SERVER-IP:8788
-```
-
-There is no default login. A clean `/config` opens the setup wizard automatically.
-
----
-
-# Alternative: Docker Compose CLI
-
-After host preparation:
-
-```bash
-cd /opt/youtubarr
-cp -n .env.example .env
-nano .env
-docker compose up -d --build
-```
-
-Check status:
-
-```bash
-docker compose ps
-```
-
-Logs:
-
-```bash
-docker compose logs -f youtubarr
-```
-
----
-
-# First-run setup wizard
-
-A clean configuration opens the setup wizard automatically.
-
-## Step 1 — Create User
-
-Create the first administrator username and password.
-
-- No factory username.
-- No factory password.
-- Password must meet the application's minimum requirements.
-- Youtubarr generates its own application API key.
-
-## Step 2 — Media Types
-
-Choose the modules you want:
-
-- **Series** — enabled by default.
-- **Music** — enabled by default.
-- **Movies** — disabled by default.
-
-If Movies remains disabled, Radarr is not required and Movies is omitted from the main navigation.
-
-## Step 3 — Connect Services
-
-Enter the URL and API key for each enabled Arr service.
-
-Typical examples:
-
-```text
-Sonarr: http://192.168.1.10:8989
-Lidarr: http://192.168.1.10:8686
-Radarr: http://192.168.1.10:7878
-```
-
-Use addresses that are reachable **from inside the Youtubarr container**. An Arr API key is normally available in that application's **Settings → General** page.
-
-## Step 4 — Library and FUSE
-
-Youtubarr discovers the root folders reported by each connected Arr service and creates local Youtubarr mappings under `/library`.
-
-Example:
-
-```text
-Sonarr reports:
-/zurg_mnt/zurg/__magic__/tv/kids
-
-Youtubarr local mapping:
-/library/tv/kids
-```
-
-Another root remains separate:
-
-```text
-/zurg_mnt/zurg/__magic__/tv/bbc
-        ↓
-/library/tv/bbc
-```
-
-Multiple Arr roots are intentionally **not** collapsed into one directory.
-
-## Step 5 — Finish
-
-Youtubarr validates the enabled integrations and mappings before opening the normal dashboard.
-
----
-
-# Arr root mapping behaviour
-
-Youtubarr never treats the remote/read-only Arr root as its own writable output directory. The Arr path is used to work out the corresponding local Youtubarr destination.
-
-Example:
-
-```text
-Sonarr root:
-/zurg_mnt/zurg/__magic__/tv/kids
-
-Youtubarr mapping:
-/zurg_mnt/zurg/__magic__/tv/kids
-        ↓
-/library/tv/kids
-```
-
-A series under:
-
-```text
-/zurg_mnt/zurg/__magic__/tv/kids/Jeopardy (2002)
-```
-
-therefore maps to:
-
-```text
-/library/tv/kids/Jeopardy (2002)
-```
-
-and S01E01 can become:
-
-```text
-/library/tv/kids/Jeopardy (2002)/Season 01/
-Jeopardy (2002) - S01E01 - Pilot.mp4
-```
-
-If several configured roots could match a source path, the **deepest/longest matching root** wins.
-
----
-
-# Series workflow
-
-1. Sonarr already contains the series and canonical episode metadata.
-2. Open the series/episode in Youtubarr.
-3. Search YouTube or provide the intended YouTube source.
-4. Review/select the source.
-5. Acquire it.
-6. Youtubarr resolves the YouTube media.
-7. A virtual asset is registered below `/mnt/youtubarr/tv`.
-8. A real Linux symlink is created at the Sonarr-derived Youtubarr library path.
-9. Your media server scans the exported Youtubarr library.
-
-Youtubarr uses Sonarr's episode title, season and episode numbering rather than trusting arbitrary YouTube titles when Sonarr already knows the canonical metadata.
-
----
-
-# Playlist → Sonarr season workflow
-
-This is useful for old programmes whose YouTube playlist is correctly ordered but whose individual video titles are poor.
-
-```text
-Playlist item 1 → S01E01
-Playlist item 2 → S01E02
-Playlist item 3 → S01E03
-...
-```
-
-For a playlist where YouTube titles are only `Episode 1`, `Episode 2`, etc., Sonarr still supplies the actual episode titles and numbering.
-
-Always review the playlist ordering before bulk acquisition.
-
----
-
-# Music workflow
-
-1. Lidarr contains the artist/album/track metadata.
-2. Select the target in Youtubarr.
-3. Search/select the matching YouTube source.
-4. Youtubarr resolves a compatible audio stream.
-5. The virtual asset is exposed below `/mnt/youtubarr/music`.
-6. A real symlink is created under the Lidarr-derived `/library/music/...` path.
-
-Example:
-
-```text
-/library/music/main/Artist/Album/01 - Track.m4a
-  -> /mnt/youtubarr/music/<asset-id>.m4a
-```
-
----
-
-# Playlist → Lidarr album workflow
-
-A YouTube playlist can be mapped to a Lidarr album by order:
-
-```text
-Playlist item 1 → Track 01
-Playlist item 2 → Track 02
-Playlist item 3 → Track 03
-...
-```
-
-This is useful when the playlist is correctly ordered but individual YouTube titles do not cleanly match the album metadata.
-
----
-
-# Optional Movies / Radarr
-
-Movies are deliberately optional because YouTube is not normally a general full-movie source.
-
-When Movies is disabled:
-
-- Radarr is not required.
-- Setup does not require a Radarr connection.
-- The Movies navigation item is hidden.
-
-When Movies is enabled, Youtubarr can use Radarr metadata and root mappings for manually reviewed sources associated with a Radarr movie entry.
-
----
-
-# DUMB + Zurg compatibility
-
-Youtubarr does **not** require DUMB or Zurg, but it is designed to coexist with both.
-
-Typical arrangement:
-
-```text
-DUMB
- ├─ Sonarr
- ├─ Radarr
- └─ Lidarr
-       │
-       │ HTTP APIs
-       ▼
-Youtubarr
-       │
-       ├─ /library         writable Youtubarr exported library
-       └─ /mnt/youtubarr   Youtubarr FUSE virtual media
-
-Zurg
- └─ /zurg_mnt/...         separate existing virtual/remote media roots
-```
-
-Youtubarr:
-
-- reads Sonarr/Lidarr/Radarr metadata over HTTP;
-- may see Zurg-style root names reported by the Arr services;
-- uses those roots only as path identities for mapping;
-- does **not** write YouTube files into `/zurg_mnt`;
-- does **not** chmod/chown Zurg;
-- does **not** remount Zurg;
-- does **not** rename or delete Zurg content;
-- keeps `/mnt/youtubarr` dedicated to Youtubarr's own virtual filesystem.
-
-See [docs/DUMB-ZURG.md](docs/DUMB-ZURG.md).
-
----
-
-# Jellyfin / Plex / Emby integration
-
-A media server must be able to see **both**:
-
-1. the Youtubarr exported library; and
-2. `/mnt/youtubarr` at the same absolute path used by the symlink.
-
-Example Jellyfin additions:
+2. Choose **Add stack**.
+3. Enter a name such as `youtubarr`.
+4. Choose **Web editor**.
+5. Paste the following Compose.
+6. Click **Deploy the stack**.
 
 ```yaml
-volumes:
-  - /opt/youtubarr-data/library:/youtube-library:ro
-  - /mnt/youtubarr:/mnt/youtubarr:ro,rslave
+services:
+
+  youtubarr:
+    container_name: youtubarr
+    image: ghcr.io/fudmonk95/youtubarr:latest
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+    volumes:
+      - /mnt/appdata/Youtubarr/config:/config
+      - /mnt/appdata/Youtubarr/library:/library
+      - /mnt/appdata/Youtubarr/cache:/cache
+
+      # Youtubarr creates its FUSE filesystem inside this single container.
+      # rshared propagates the nested mount back to the Debian/LXC host.
+      - type: bind
+        source: /mnt/youtubarr
+        target: /mnt/youtubarr
+        bind:
+          propagation: rshared
+
+    environment:
+      TZ: Europe/London
+      PUID: "1001"
+      PGID: "1001"
+      YOUTUBARR_LOG_LEVEL: INFO
+      YOUTUBARR_MAX_VIDEO_HEIGHT: "1080"
+      YOUTUBARR_CACHE_MAX_GB: "20"
+      YOUTUBARR_CACHE_TTL_HOURS: "24"
+
+    ports:
+      - "8788:8788"
+
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+
+    cap_add:
+      - SYS_ADMIN
+
+    security_opt:
+      - apparmor:unconfined
+
+    networks:
+      - dumb-live-network
+
+networks:
+
+  dumb-live-network:
+    external: true
+    name: dumb-live_default
 ```
 
-The media server scans `/youtube-library`, while the symlink inside that directory still resolves because `/mnt/youtubarr` exists at the same absolute target path in the media-server container.
+If you do not use the `dumb-live_default` network, replace that network section with your own existing Docker network or remove it and use normal IP/hostname connectivity.
 
-Do not automatically rewrite an existing Jellyfin/Plex/Emby Compose file. Add these mounts deliberately to the relevant media-server container.
+## 4. DUMB / Jellyfin / Arr access to the Youtubarr mount
 
----
+When Sonarr, Lidarr and Jellyfin run inside a DUMB container, DUMB must be able to see both the generated Youtubarr library and the nested Youtubarr FUSE mount.
 
-# Verifying a real symlink
+Add these volumes to the existing `DUMB` service:
 
-On the Docker host:
+```yaml
+      # Receive Youtubarr's nested FUSE mount.
+      # rslave receives mount events from the host without propagating DUMB's
+      # own mount events back into Youtubarr.
+      - type: bind
+        source: /mnt/youtubarr
+        target: /mnt/youtubarr
+        bind:
+          propagation: rslave
+
+      # Expose Youtubarr's generated symlink library.
+      - /mnt/appdata/Youtubarr/library:/youtube-library
+```
+
+The intended path flow is:
+
+```text
+/youtube-library/tv/Example Show/Season 01/Example Show - S01E01.mp4
+                   ↓ Linux symlink
+/mnt/youtubarr/tv/<asset-id>.mp4
+                   ↓ FUSE
+YouTube source
+```
+
+## 5. Verify container and FUSE state
+
+After deployment:
 
 ```bash
-test -L '/path/to/item.mp4' && echo 'real symlink'
-readlink '/path/to/item.mp4'
-ls -l '/path/to/item.mp4'
+docker ps --filter "name=youtubarr"
+findmnt -R -o TARGET,SOURCE,FSTYPE,PROPAGATION /mnt/youtubarr
+cat /mnt/youtubarr/.youtubarr.json
+docker logs --tail=100 youtubarr
 ```
 
-TV links should point below:
+Expected container state: `Up ... (healthy)`.
+
+---
+
+# First-run setup
+
+Open `http://YOUR_DOCKER_HOST:8788`.
+
+A fresh configuration does not use default credentials. The setup wizard asks you to create the administrator account, select media modules, connect the Arr applications and generate root mappings.
+
+Defaults:
 
 ```text
-/mnt/youtubarr/tv/
+Series  ON
+Music   ON
+Movies  OFF
 ```
 
-Music links should point below:
+When Youtubarr and DUMB share `dumb-live_default`, typical service URLs are:
 
 ```text
-/mnt/youtubarr/music/
+Sonarr: http://DUMB-live:8989
+Lidarr: http://DUMB-live:8686
+Radarr: http://DUMB-live:7878
 ```
 
 ---
 
-# Environment variables
+# Updating Youtubarr
 
-| Variable | Default | Purpose |
-|---|---:|---|
-| `TZ` | `Europe/London` | Container timezone |
-| `PUID` | `1000` | Ownership used for exported library/FUSE stat results |
-| `PGID` | `1000` | Group ownership |
-| `YOUTUBARR_PORT` | `8788` | Published web port |
-| `BIND_ADDRESS` | `0.0.0.0` | Host bind address |
-| `YOUTUBARR_CONFIG_DIR` | `./config` | Persistent host config/database directory |
-| `YOUTUBARR_LIBRARY_DIR` | `./library` | Persistent exported symlink library |
-| `YOUTUBARR_CACHE_DIR` | `./cache` | Disposable split-stream cache |
-| `YOUTUBARR_MOUNT_DIR` | `/mnt/youtubarr` | Host Youtubarr shared/FUSE mount |
-| `YOUTUBARR_MAX_VIDEO_HEIGHT` | `1080` | Maximum selected video height |
-| `YOUTUBARR_CACHE_MAX_GB` | `20` | Maximum transient remux cache target |
-| `YOUTUBARR_CACHE_TTL_HOURS` | `24` | Cache expiry age |
-| `YOUTUBARR_LOG_LEVEL` | `INFO` | Application log level |
+```bash
+docker pull ghcr.io/fudmonk95/youtubarr:latest
+```
 
-For Portainer, use absolute host paths for config/library/cache.
-
----
+Then use **Portainer → Stacks → youtubarr → Editor → Update the stack** and re-pull the image if Portainer offers that option. Persistent data remains in `/mnt/appdata/Youtubarr`.
 
 # Diagnostics
 
-## Host doctor
-
 ```bash
-cd /opt/youtubarr
-sudo ./scripts/doctor.sh
-```
-
-It checks the important host/runtime conditions including `/dev/fuse`, the Youtubarr mount directory, mount propagation, container state, FUSE marker visibility and API reachability.
-
-## UI status
-
-Open:
-
-```text
-System → Status
-```
-
-The application reports FUSE state, virtual-filesystem state, library/config write access, ffmpeg availability and Arr integration information.
-
-## Logs
-
-CLI deployment:
-
-```bash
-cd /opt/youtubarr
-docker compose logs -f youtubarr
-```
-
-Portainer deployment:
-
-```text
-Containers → youtubarr → Logs
-```
-
----
-
-# Common problems
-
-## `/dev/fuse` is missing
-
-Inside the Debian Docker host/LXC:
-
-```bash
+docker ps --filter "name=youtubarr"
+docker logs --tail=200 youtubarr
 ls -l /dev/fuse
+findmnt -R -o TARGET,SOURCE,FSTYPE,OPTIONS,PROPAGATION /mnt/youtubarr
+cat /mnt/youtubarr/.youtubarr.json
 ```
 
-If it is missing and Docker runs inside Proxmox LXC, fix the LXC configuration from the **Proxmox host** first.
-
-## FUSE works in the container but symlinks are broken on the host
-
-Check propagation:
-
-```bash
-findmnt -o TARGET,SOURCE,FSTYPE,PROPAGATION /mnt/youtubarr
-```
-
-Then run:
+When the repo exists at `/opt/youtubarr`:
 
 ```bash
 cd /opt/youtubarr
-sudo ./scripts/doctor.sh
+./scripts/doctor.sh
 ```
 
-The shared mount must be prepared before the Portainer stack starts.
+# Security
 
-## Arr connection fails
+- No baked-in default administrator credentials.
+- Arr API keys are stored encrypted in persistent configuration.
+- Do not commit live `/config`, databases, credentials or API keys.
+- Use normal authentication/reverse-proxy protections if exposing Youtubarr remotely.
 
-The Arr URL must be reachable from the Youtubarr container. `localhost` means Youtubarr itself, not another container or the Docker host.
-
-## Root mapping is wrong
-
-Open **Settings → Media Management** and review the remote Arr root against its local `/library/...` mapping. Youtubarr's writable local destination must not be a read-only Zurg root.
-
-## Split-stream source takes time to begin
-
-Separate video/audio sources need an ffmpeg remux into the bounded transient cache before they can behave as a stable seekable virtual file.
-
-## Existing file blocks acquisition
-
-Youtubarr does not silently overwrite an unrelated existing media file or symlink at the destination path. Resolve the collision rather than deleting library content automatically.
-
----
-
-# Reboot behaviour
-
-The host service:
-
-```text
-youtubarr-mount.service
-```
-
-prepares the shared mount before Docker starts. The **single** Youtubarr container starts the FUSE process and application runtime.
-
-There is no second FUSE container and no requirement to manually rerun a FUSE-preparation script after every normal reboot once the host setup has been installed correctly.
-
----
-
-# Updating
-
-## Portainer Git stack
-
-Update the host-side clone first so host scripts remain current:
+# Development validation
 
 ```bash
-cd /opt/youtubarr
-sudo git pull
-sudo ./scripts/install-host.sh
-```
-
-Then use Portainer's stack update/redeploy option and pull the latest repository version. Do not delete the persistent config/library folders unless you intentionally want a clean installation.
-
-## Docker Compose CLI
-
-```bash
-cd /opt/youtubarr
-git pull
-sudo ./scripts/install-host.sh
-docker compose up -d --build
-```
-
----
-
-# Uninstall
-
-Stop/remove the Portainer stack or CLI stack first.
-
-CLI example:
-
-```bash
-cd /opt/youtubarr
-docker compose down
-sudo ./scripts/uninstall-host.sh
-```
-
-The host uninstall script does not deliberately delete Youtubarr config data, the exported library, Zurg data, Sonarr/Radarr/Lidarr data or media-server libraries.
-
-Remove persistent Youtubarr data manually only when you really intend to destroy the installation.
-
----
-
-# Security notes
-
-- Arr API keys are stored by the application rather than being exposed in the public repository.
-- Browser sessions use an HTTP-only cookie.
-- Youtubarr generates its own application API key during first setup.
-- Signed media URLs should not be deliberately emitted to normal logs.
-- The container receives `SYS_ADMIN` because Linux FUSE mounting requires it.
-- `/dev/fuse` is passed explicitly to the single Youtubarr container.
-- The Docker socket is not required and should not be mounted into Youtubarr.
-- Do not commit `/config`, database files, secrets or browser cookies to GitHub.
-
----
-
-# Repository layout
-
-```text
-Youtubarr/
-├── backend/
-│   ├── tests/
-│   └── youtubarr/
-│       ├── web/
-│       ├── acquisition.py
-│       ├── arr.py
-│       ├── fuse_mount.py
-│       ├── virtual.py
-│       └── ...
-├── docs/
-├── scripts/
-├── systemd/
-├── docker-compose.yml
-├── Dockerfile
-├── .env.example
-├── pyproject.toml
-└── README.md
-```
-
----
-
-# Development and tests
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install pytest
 PYTHONPATH=backend pytest -q
+python -m compileall -q backend/youtubarr
+node --check backend/youtubarr/web/assets/app.js
+node --check backend/youtubarr/web/assets/app-arr-shell.js
+node --check backend/youtubarr/web/assets/app-arr-pages.js
 ```
 
-Fixture/unit tests are not treated as proof that a YouTube/FUSE/media-server path works on every Docker, NAS or LXC configuration. Use **System → Status**, `doctor.sh` and an actual playback/seek test on the target server.
+# Licence
 
----
-
-# Project status
-
-Youtubarr v1.0.0 is the first release of the clean v1 architecture. It is intended to be deployed as a real stack rather than a UI mock-up, but YouTube delivery formats and self-hosted Docker/FUSE environments vary. Report reproducible problems with logs and the relevant System Status/doctor output.
-
----
-
-# License and project relationship
-
-GPL-3.0.
-
-Youtubarr is an independent project. It is not affiliated with, endorsed by or part of YouTube/Google, Sonarr, Radarr, Lidarr, Jellyfin, Plex, Emby, DUMB or Zurg.
-
-The interface is an original implementation inspired by common interaction patterns in the Arr ecosystem rather than a copy of another project's source code.
-
-Use Youtubarr only with media you are permitted to access and use.
+See `LICENSE`.
