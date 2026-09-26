@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 120" role="img" aria-label="Youtubarr">
+  <defs>
+    <linearGradient id="r" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff4e45"/><stop offset="1" stop-color="#e60012"/></linearGradient>
+  </defs>
+  <g transform="translate(8 8)">
+    <path d="M52 2a50 50 0 1 0 50 50" fill="none" stroke="#e7e7e7" stroke-width="10" stroke-linecap="round"/>
+    <path d="M52 2a50 50 0 0 1 50 50" fill="none" stroke="url(#r)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M42 29c0-5 5-8 9-5l34 23c4 3 4 8 0 11L51 81c-4 3-9 0-9-5V29z" fill="url(#r)"/>
+  </g>
+  <text x="128" y="78" font-family="Arial,Helvetica,sans-serif" font-size="61" font-weight="700" fill="#f4f4f4">Youtu</text>
+  <text x="292" y="78" font-family="Arial,Helvetica,sans-serif" font-size="61" font-weight="700" fill="#ff2b2b">barr</text>
+</svg>
