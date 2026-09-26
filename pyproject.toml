@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "youtubarr"
+version = "1.0.0"
+description = "Arr-style YouTube acquisition and virtual media bridge"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "sqlalchemy>=2.0,<3",
+  "pydantic-settings>=2.10,<3",
+  "httpx>=0.28,<1",
+  "cryptography>=45,<50",
+  "python-multipart>=0.0.20,<1",
+  "yt-dlp[default]>=2026.1.1",
+  "fusepy>=3.0.1,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
+
+[project.scripts]
+youtubarr = "youtubarr.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/youtubarr"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
