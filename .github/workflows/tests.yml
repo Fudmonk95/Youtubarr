@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  backend-tests:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,13 +22,38 @@ jobs:
           python-version: '3.12'
           cache: pip
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Run tests
+      - name: Validate Python syntax
+        run: python -m compileall -q backend/youtubarr
+
+      - name: Run backend tests
         env:
           PYTHONPATH: backend
         run: pytest -q
+
+      - name: Validate browser JavaScript
+        run: node --check backend/youtubarr/web/assets/app.js
+
+      - name: Validate host scripts
+        run: |
+          bash -n scripts/install-host.sh
+          bash -n scripts/prepare-mount.sh
+          bash -n scripts/doctor.sh
+          bash -n scripts/uninstall-host.sh
+          bash -n scripts/youtubarr
+
+      - name: Validate single-container Compose stack
+        run: |
+          docker compose config >/tmp/youtubarr-compose.yml
+          test "$(docker compose config --services | wc -l)" -eq 1
+          test "$(docker compose config --services)" = "youtubarr"
