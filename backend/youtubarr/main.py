@@ -400,6 +400,24 @@ def verify_link(path: str, _: User = Depends(_auth)) -> dict:
     return verify_symlink(path)
 
 
+@app.get("/api/wanted/{family}/{mode}")
+def wanted_mode(family: str, mode: str, page_size: int = 200, _: User = Depends(_auth)) -> dict:
+    family = family.lower()
+    mode = mode.lower()
+    kind = {"series": "sonarr", "music": "lidarr", "movies": "radarr"}.get(family)
+    if not kind:
+        raise HTTPException(422, "Wanted family must be series, music or movies")
+    if mode not in {"missing", "cutoff"}:
+        raise HTTPException(422, "Wanted mode must be missing or cutoff")
+    app_row = arr.get_integration(kind)
+    endpoint = "wanted/missing" if mode == "missing" else "wanted/cutoff"
+    try:
+        return arr.request_integration(app_row, endpoint, {"page": 1, "pageSize": max(1, min(page_size, 1000)), "sortDirection": "descending"})
+    except Exception as exc:
+        detail = getattr(exc, "detail", str(exc))
+        raise HTTPException(502, f"Could not read {kind.title()} wanted {mode}: {detail}")
+
+
 @app.get("/api/wanted/{family}")
 def wanted(family: str, page_size: int = 200, _: User = Depends(_auth)) -> dict:
     family = family.lower()
