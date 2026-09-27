@@ -23,6 +23,8 @@ def utcnow() -> datetime:
 
 def init_db():
     global _engine, _SessionLocal
+    if _engine is not None and _SessionLocal is not None:
+        return _engine
     settings.config_dir.mkdir(parents=True, exist_ok=True)
     settings.library_dir.mkdir(parents=True, exist_ok=True)
     settings.cache_dir.mkdir(parents=True, exist_ok=True)
