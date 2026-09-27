@@ -39,6 +39,13 @@ def main() -> None:
     settings.library_dir.mkdir(parents=True, exist_ok=True)
     settings.virtual_mount.mkdir(parents=True, exist_ok=True)
 
+    # The generated library is shared with Sonarr/Lidarr/Radarr. Repair the
+    # entire tree on every start so upgrades and older root-owned directories
+    # become writable by ARR_GID automatically.
+    from .library import ensure_library_permissions
+
+    ensure_library_permissions()
+
     fuse_proc = None
     if not _already_mounted():
         fuse_proc = subprocess.Popen([sys.executable, "-m", "youtubarr.fuse_mount"])
