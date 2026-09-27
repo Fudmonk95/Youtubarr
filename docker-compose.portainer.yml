@@ -10,6 +10,13 @@ services:
       TZ: Europe/London
       PUID: "1001"
       PGID: "1001"
+
+      # User/group used by Sonarr/Lidarr/Radarr inside DUMB.
+      # Youtubarr keeps ownership as PUID but makes every /library directory
+      # group-writable and setgid to ARR_GID so all future folders inherit it.
+      ARR_UID: "1000"
+      ARR_GID: "1000"
+
       YOUTUBARR_LOG_LEVEL: INFO
       YOUTUBARR_MAX_VIDEO_HEIGHT: "1080"
       YOUTUBARR_CACHE_MAX_GB: "20"
