@@ -18,6 +18,7 @@ from .youtube import video_id
 
 _executor = ThreadPoolExecutor(max_workers=max(1, settings.worker_count), thread_name_prefix="youtubarr-acquire")
 _reader = RangeReader()
+_INCOMPLETE_STATUSES = {"queued", "resolving", "preparing", "linking"}
 
 
 def _integration(kind: str) -> Integration:
@@ -48,6 +49,9 @@ def _episode_target(episode_id: int) -> tuple[Integration, MediaItem, Path, str]
         path=str(output),
         season_number=season,
         episode_number=number,
+        track_number=0,
+        disc_number=1,
+        duration=0,
         monitored=bool(episode.get("monitored", True)),
         has_file=bool(episode.get("hasFile", False)),
         overview=episode.get("overview") or "",
@@ -75,6 +79,8 @@ def _track_target(track_id: int) -> tuple[Integration, MediaItem, Path, str]:
         parent_remote_id=int(album["id"]),
         title=track_title,
         path=str(output),
+        season_number=0,
+        episode_number=0,
         track_number=track_no,
         disc_number=disc_no,
         duration=int((track.get("duration") or 0) / 1000) if (track.get("duration") or 0) > 10000 else int(track.get("duration") or 0),
@@ -99,6 +105,11 @@ def _movie_target(movie_id: int) -> tuple[Integration, MediaItem, Path, str]:
         title=title,
         year=year,
         path=str(output),
+        season_number=0,
+        episode_number=0,
+        track_number=0,
+        disc_number=1,
+        duration=0,
         monitored=bool(movie.get("monitored", True)),
         has_file=bool(movie.get("hasFile", False)),
         overview=movie.get("overview") or "",
@@ -106,7 +117,43 @@ def _movie_target(movie_id: int) -> tuple[Integration, MediaItem, Path, str]:
     return app, media, output, f"{title} ({year})" if year else title
 
 
+def _normalise_media_fields(media: MediaItem) -> MediaItem:
+    """Keep NOT NULL media columns safe for both inserts and updates.
+
+    SQLAlchemy column defaults are applied on INSERT, not when an already-created
+    transient object is copied over an existing database row. Without this,
+    episode/movie updates could write None into music-only numeric columns.
+    """
+    numeric_defaults = {
+        "parent_remote_id": 0,
+        "year": 0,
+        "season_number": 0,
+        "episode_number": 0,
+        "track_number": 0,
+        "disc_number": 1,
+        "duration": 0,
+    }
+    string_defaults = {
+        "sort_title": "",
+        "path": "",
+        "poster_url": "",
+        "overview": "",
+    }
+    for key, default in numeric_defaults.items():
+        if getattr(media, key, None) is None:
+            setattr(media, key, default)
+    for key, default in string_defaults.items():
+        if getattr(media, key, None) is None:
+            setattr(media, key, default)
+    if getattr(media, "monitored", None) is None:
+        media.monitored = True
+    if getattr(media, "has_file", None) is None:
+        media.has_file = False
+    return media
+
+
 def _upsert_media(media: MediaItem) -> int:
+    media = _normalise_media_fields(media)
     with session_scope() as db:
         existing = db.scalar(
             select(MediaItem).where(
@@ -117,10 +164,11 @@ def _upsert_media(media: MediaItem) -> int:
         )
         if existing:
             for key in (
-                "parent_remote_id", "title", "year", "path", "season_number", "episode_number",
-                "track_number", "disc_number", "duration", "monitored", "has_file", "overview"
+                "parent_remote_id", "title", "sort_title", "year", "path", "season_number", "episode_number",
+                "track_number", "disc_number", "duration", "monitored", "has_file", "poster_url", "overview"
             ):
                 setattr(existing, key, getattr(media, key))
+            db.flush()
             return existing.id
         db.add(media)
         db.flush()
@@ -221,6 +269,23 @@ def _run(acquisition_id: int, kind: str, youtube_url: str) -> None:
         else:
             message = str(exc) or exc.__class__.__name__
         _update(acquisition_id, status="failed", progress=0, error=message[:1200])
+
+
+def recover_incomplete() -> int:
+    """Resume acquisitions that were interrupted by a container restart."""
+    with session_scope() as db:
+        rows = list(
+            db.execute(
+                select(Acquisition.id, Acquisition.youtube_url, MediaItem.kind)
+                .join(MediaItem, MediaItem.id == Acquisition.media_item_id)
+                .where(Acquisition.status.in_(_INCOMPLETE_STATUSES))
+                .order_by(Acquisition.id)
+            )
+        )
+    for acquisition_id, youtube_url, kind in rows:
+        _update(acquisition_id, status="queued", progress=0, error="")
+        _executor.submit(_run, acquisition_id, kind, youtube_url)
+    return len(rows)
 
 
 def list_acquisitions(limit: int = 200) -> list[Acquisition]:
