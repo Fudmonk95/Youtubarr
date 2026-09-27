@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 import signal
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 from .config import settings
 
@@ -45,6 +43,17 @@ def main() -> None:
     if not _already_mounted():
         fuse_proc = subprocess.Popen([sys.executable, "-m", "youtubarr.fuse_mount"])
         _wait_for_fuse(fuse_proc)
+
+    # Initialise the persistent database before the API starts and resume any
+    # acquisition that was interrupted by a container/image update. init_db()
+    # is idempotent, so FastAPI's startup hook can call it again safely.
+    from .db import init_db
+    from .acquisition import recover_incomplete
+
+    init_db()
+    recovered = recover_incomplete()
+    if recovered:
+        print(f"Recovered {recovered} interrupted Youtubarr acquisition(s).", flush=True)
 
     def stop(signum=None, frame=None):
         if fuse_proc and fuse_proc.poll() is None:
