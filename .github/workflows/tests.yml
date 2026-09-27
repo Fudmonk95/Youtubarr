@@ -47,6 +47,7 @@ jobs:
           node --check backend/youtubarr/web/assets/app-arr-shell.js
           node --check backend/youtubarr/web/assets/app-arr-pages.js
           node --check backend/youtubarr/web/assets/app-youtube-fixes.js
+          node --check backend/youtubarr/web/assets/app-availability.js
 
       - name: Validate host scripts
         run: |
