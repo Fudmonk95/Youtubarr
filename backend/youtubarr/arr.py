@@ -9,6 +9,7 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from .availability import overlay_arr_response
 from .db import session_scope
 from .models import Integration, RootMapping
 from .security import decrypt_secret
@@ -48,13 +49,14 @@ def request_raw(kind: str, base_url: str, api_key: str, endpoint: str, params: d
 
 
 def request_integration(integration: Integration, endpoint: str, params: dict | None = None) -> Any:
-    return request_raw(
+    payload = request_raw(
         integration.kind,
         integration.base_url,
         decrypt_secret(integration.api_key_enc),
         endpoint,
         params,
     )
+    return overlay_arr_response(integration.kind, endpoint, payload)
 
 
 def test_connection(kind: str, base_url: str, api_key: str) -> dict[str, Any]:
