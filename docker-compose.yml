@@ -3,15 +3,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: youtubarr:1.0.0
+    image: youtubarr:1.0.4
     container_name: youtubarr
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${YOUTUBARR_PORT:-8788}:8788"
     environment:
       TZ: "${TZ:-Europe/London}"
-      PUID: "${PUID:-1000}"
-      PGID: "${PGID:-1000}"
+      PUID: "${PUID:-1001}"
+      PGID: "${PGID:-1001}"
+      ARR_UID: "${ARR_UID:-1000}"
+      ARR_GID: "${ARR_GID:-1000}"
       YOUTUBARR_LOG_LEVEL: "${YOUTUBARR_LOG_LEVEL:-INFO}"
       YOUTUBARR_MAX_VIDEO_HEIGHT: "${YOUTUBARR_MAX_VIDEO_HEIGHT:-1080}"
       YOUTUBARR_CACHE_MAX_GB: "${YOUTUBARR_CACHE_MAX_GB:-20}"
