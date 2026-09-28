@@ -2,7 +2,7 @@ from pathlib import Path
 
 from youtubarr import availability
 from youtubarr.acquisition import _normalise_media_fields
-from youtubarr.arr import generate_mapping_suggestions
+from youtubarr.arr import generate_mapping_suggestions, translate_path
 from youtubarr.models import Integration, MediaItem
 from youtubarr.security import hash_password, verify_password
 
@@ -32,6 +32,22 @@ def test_radarr_and_lidarr_families_are_distinct():
     lidarr = Integration(id=3, kind="lidarr", name="Lidarr", base_url="http://lidarr", api_key_enc="x")
     assert generate_mapping_suggestions(radarr, [{"path": "/remote/main"}])[0]["localPath"].startswith("/library/movies/")
     assert generate_mapping_suggestions(lidarr, [{"path": "/remote/main"}])[0]["localPath"].startswith("/library/music/")
+
+
+def test_youtubarr_shared_roots_map_directly():
+    sonarr = Integration(id=1, kind="sonarr", name="Sonarr", base_url="http://sonarr", api_key_enc="x")
+    lidarr = Integration(id=2, kind="lidarr", name="Lidarr", base_url="http://lidarr", api_key_enc="x")
+    radarr = Integration(id=3, kind="radarr", name="Radarr", base_url="http://radarr", api_key_enc="x")
+
+    assert generate_mapping_suggestions(sonarr, [{"path": "/youtube-library/tv/kids"}])[0]["localPath"] == "/library/tv/kids"
+    assert generate_mapping_suggestions(lidarr, [{"path": "/youtube-library/music"}])[0]["localPath"] == "/library/music"
+    assert generate_mapping_suggestions(radarr, [{"path": "/youtube-library/movies"}])[0]["localPath"] == "/library/movies"
+
+
+def test_youtubarr_series_path_translates_without_saved_mapping():
+    assert translate_path(999, "/youtube-library/tv/kids/Jeopardy (2002)") == "/library/tv/kids/Jeopardy (2002)"
+    assert translate_path(999, "/youtube-library/music/Artist") == "/library/music/Artist"
+    assert translate_path(999, "/youtube-library/movies/Film (2026)") == "/library/movies/Film (2026)"
 
 
 def test_episode_media_normalises_music_only_not_null_fields():
