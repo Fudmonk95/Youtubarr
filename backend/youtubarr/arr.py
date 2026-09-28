@@ -17,6 +17,8 @@ from .security import decrypt_secret
 
 API_PATHS = {"sonarr": "/api/v3", "radarr": "/api/v3", "lidarr": "/api/v1"}
 FAMILIES = {"sonarr": "tv", "radarr": "movies", "lidarr": "music"}
+YOUTUBARR_REMOTE_LIBRARY = "/youtube-library"
+YOUTUBARR_LOCAL_LIBRARY = "/library"
 
 
 def _clean_base_url(url: str) -> str:
@@ -112,25 +114,51 @@ def _safe_suffix(path: str) -> str:
     return name
 
 
+def _direct_youtubarr_path(remote_path: str) -> str | None:
+    """Translate the DUMB-visible Youtubarr library into Youtubarr's own bind path.
+
+    Sonarr/Lidarr/Radarr see the shared library as /youtube-library while the
+    Youtubarr container mounts the exact same host directory at /library. These
+    are two views of one tree, so this mapping must work even when a newly-added
+    Arr root has not yet been written to the RootMapping table.
+    """
+    normalized = (remote_path or "").replace("\\", "/").rstrip("/")
+    if normalized == YOUTUBARR_REMOTE_LIBRARY:
+        return YOUTUBARR_LOCAL_LIBRARY
+    prefix = YOUTUBARR_REMOTE_LIBRARY + "/"
+    if normalized.startswith(prefix):
+        relative = normalized[len(prefix) :].lstrip("/")
+        return os.path.join(YOUTUBARR_LOCAL_LIBRARY, relative) if relative else YOUTUBARR_LOCAL_LIBRARY
+    return None
+
+
 def generate_mapping_suggestions(integration: Integration, roots: list[dict[str, Any]]) -> list[dict[str, Any]]:
     family = FAMILIES[integration.kind]
     seen: set[str] = set()
     suggestions = []
     for root in roots:
         remote = root["path"].rstrip("/\\")
-        suffix = _safe_suffix(remote)
-        local = f"/library/{family}/{suffix}"
-        key = local.lower()
-        if key in seen:
-            parent = _safe_suffix(str(PurePosixPath(remote.replace('\\', '/')).parent))
-            local = f"/library/{family}/{parent}-{suffix}"
+        direct = _direct_youtubarr_path(remote)
+        if direct:
+            # /youtube-library is the DUMB-side view of /library. Preserve the
+            # exact relative path instead of creating /library/tv/tv or
+            # /library/music/music from the final folder name.
+            local = direct
             key = local.lower()
-        counter = 2
-        base = local
-        while key in seen:
-            local = f"{base}-{counter}"
+        else:
+            suffix = _safe_suffix(remote)
+            local = f"/library/{family}/{suffix}"
             key = local.lower()
-            counter += 1
+            if key in seen:
+                parent = _safe_suffix(str(PurePosixPath(remote.replace('\\', '/')).parent))
+                local = f"/library/{family}/{parent}-{suffix}"
+                key = local.lower()
+            counter = 2
+            base = local
+            while key in seen:
+                local = f"{base}-{counter}"
+                key = local.lower()
+                counter += 1
         seen.add(key)
         suggestions.append(
             {
@@ -171,6 +199,13 @@ def mapping_for_path(integration_id: int, remote_item_path: str) -> RootMapping:
 
 
 def translate_path(integration_id: int, remote_item_path: str) -> str:
+    # Youtubarr's shared library has a known container-path pair and therefore
+    # does not need a persisted RootMapping row. This is especially important
+    # after a Sonarr/Lidarr series or artist is moved into /youtube-library.
+    direct = _direct_youtubarr_path(remote_item_path)
+    if direct:
+        return direct
+
     mapping = mapping_for_path(integration_id, remote_item_path)
     remote = remote_item_path.replace("\\", "/").rstrip("/")
     root = mapping.remote_path.replace("\\", "/").rstrip("/")
