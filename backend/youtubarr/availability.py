@@ -66,6 +66,83 @@ def completed_availability(kind: str, remote_ids: list[int] | set[int] | None = 
     return output
 
 
+def completed_parent_counts(kind: str) -> dict[int, int]:
+    """Count unique live completed Youtubarr children by Arr parent id.
+
+    For episodes the parent id is the Sonarr series id. This lets the Series
+    poster grid include media that Youtubarr has successfully created even when
+    Sonarr has not registered the file yet.
+    """
+    with session_scope() as db:
+        rows = list(
+            db.execute(
+                select(MediaItem, Acquisition)
+                .join(Acquisition, Acquisition.media_item_id == MediaItem.id)
+                .where(MediaItem.kind == kind, Acquisition.status == "complete")
+                .order_by(Acquisition.id.desc())
+            )
+        )
+
+    grouped: dict[int, set[int]] = {}
+    seen: set[tuple[int, int]] = set()
+    for media, acquisition in rows:
+        parent_id = int(media.parent_remote_id or 0)
+        remote_id = int(media.remote_id or 0)
+        key = (parent_id, remote_id)
+        if not parent_id or not remote_id or key in seen:
+            continue
+        seen.add(key)
+        if not _target_is_live(media.path):
+            continue
+        grouped.setdefault(parent_id, set()).add(remote_id)
+
+    return {parent_id: len(remote_ids) for parent_id, remote_ids in grouped.items()}
+
+
+def overlay_series_progress(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add conservative combined Sonarr/Youtubarr progress to series resources.
+
+    Sonarr remains untouched: its original EpisodeFileCount is preserved.
+    Youtubarr exposes separate local and combined counts. We use the larger of
+    Sonarr's registered count and Youtubarr's verified local count so a file
+    registered by both systems is never double-counted.
+    """
+    local_counts = completed_parent_counts("episode")
+    output: list[dict[str, Any]] = []
+
+    for item in items:
+        row = dict(item)
+        series_id = int(row.get("id") or 0)
+        statistics = dict(row.get("statistics") or {})
+        total = int(statistics.get("episodeCount") or statistics.get("totalEpisodeCount") or 0)
+        arr_count = int(statistics.get("episodeFileCount") or 0)
+        local_count = int(local_counts.get(series_id, 0))
+        available = max(arr_count, local_count)
+        if total > 0:
+            available = min(total, available)
+        percent = round((available / total) * 100, 1) if total else 0.0
+
+        row["arrEpisodeFileCount"] = arr_count
+        row["youtubarrEpisodeFileCount"] = local_count
+        row["availableEpisodeCount"] = available
+        row["episodeCount"] = total
+        row["availabilityPercent"] = percent
+        row["fullyAvailable"] = bool(total and available >= total)
+
+        statistics["youtubarrEpisodeFileCount"] = local_count
+        statistics["availableEpisodeCount"] = available
+        statistics["percentAvailable"] = percent
+        row["statistics"] = statistics
+        output.append(row)
+
+    return output
+
+
+def overlay_series_item(item: dict[str, Any]) -> dict[str, Any]:
+    rows = overlay_series_progress([item])
+    return rows[0] if rows else dict(item)
+
+
 def overlay_items(kind: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Overlay verified Youtubarr availability onto Arr resources.
 
@@ -131,6 +208,9 @@ def overlay_arr_response(app_kind: str, endpoint: str, payload: Any) -> Any:
         return payload
 
     endpoint_key = endpoint.strip("/").lower()
+
+    if app_kind == "sonarr" and (endpoint_key == "series" or endpoint_key.startswith("series/")):
+        return overlay_series_progress(payload) if isinstance(payload, list) else overlay_series_item(payload)
 
     if app_kind == "sonarr" and (endpoint_key == "episode" or endpoint_key.startswith("episode/")):
         return overlay_items(kind, payload) if isinstance(payload, list) else overlay_item(kind, payload)
