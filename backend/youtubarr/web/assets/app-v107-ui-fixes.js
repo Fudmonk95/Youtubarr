@@ -107,3 +107,36 @@ function episodeTable(eps,seriesTitle='',seriesId=0){
     </section>`;
   }).join('');
 }
+
+/* Complete the handoff from Series -> Search Playlists -> Use Playlist. */
+const __v107BaseRenderPlaylistMapper=window.renderPlaylistMapper;
+const __v107BaseLoadSeriesSeasons=window.loadSeriesSeasons;
+
+if(typeof __v107BaseRenderPlaylistMapper==='function'){
+  window.renderPlaylistMapper=function(context=null){
+    window.__v107PlaylistContext=context||window.__v107PlaylistContext||null;
+    __v107BaseRenderPlaylistMapper(context);
+    const ctx=window.__v107PlaylistContext;
+    if(ctx?.playlistUrl){
+      const urlInput=document.getElementById('plUrl');
+      if(urlInput)urlInput.value=ctx.playlistUrl;
+    }
+  };
+}
+
+if(typeof __v107BaseLoadSeriesSeasons==='function'){
+  window.loadSeriesSeasons=async function(){
+    await __v107BaseLoadSeriesSeasons();
+    const ctx=window.__v107PlaylistContext;
+    const seriesId=Number(document.getElementById('plSeries')?.value||0);
+    if(ctx?.family==='series'&&Number(ctx.seriesId||0)===seriesId){
+      const seasonSelect=document.getElementById('plSeason');
+      if(seasonSelect&&ctx.seasonSelection!==undefined&&ctx.seasonSelection!==null){
+        const desired=String(ctx.seasonSelection);
+        if([...seasonSelect.options].some(option=>option.value===desired))seasonSelect.value=desired;
+      }
+      const urlInput=document.getElementById('plUrl');
+      if(urlInput&&ctx.playlistUrl)urlInput.value=ctx.playlistUrl;
+    }
+  };
+}
