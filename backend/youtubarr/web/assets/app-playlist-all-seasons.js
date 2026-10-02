@@ -30,6 +30,16 @@ async function loadSeriesSeasons(){
   }
 
   $('#plSeason').innerHTML=options.join('')||'<option value="">No seasons available</option>';
+
+  // A series/season-level playlist search can hand its result straight into
+  // Import Lists. Keep that context through the async Sonarr season lookup.
+  let context=null;
+  try{context=JSON.parse(sessionStorage.getItem('playlistContext')||'null')}catch{}
+  if(context?.family==='series'&&Number(context.seriesId||0)===id){
+    const requested=String(context.seasonSelection??'');
+    if(requested&&[...$('#plSeason').options].some(o=>o.value===requested))$('#plSeason').value=requested;
+    if(context.playlistUrl&&$('#plUrl'))$('#plUrl').value=context.playlistUrl;
+  }
 }
 
 function orderedSeriesTargets(selection){
@@ -66,7 +76,7 @@ async function previewPlaylist(){
       const onlyMissing=Boolean($('#plMissing')?.checked);
       for(let i=0;i<pairCount;i++){
         const target=targets[i];
-        const shouldQueue=!onlyMissing||(!target.hasFile&&target.monitored!==false);
+        const shouldQueue=!onlyMissing||(!youtubarrEpisodePresent(target)&&target.monitored!==false);
         playlistState.mappings.push({entry:entries[i],target,entryIndex:i,shouldQueue});
       }
     }else{
