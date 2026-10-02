@@ -63,6 +63,7 @@ function parsePlaylistEpisodeToken(title){
   const value=String(title||'');
   const patterns=[
     /\bS\s*0*(\d{1,2})\s*E\s*0*(\d{1,3})\b/i,
+    /\bS\s*0*(\d{1,2})\D{0,12}(?:episode|ep)\s*0*(\d{1,3})\b/i,
     /\b(\d{1,2})\s*x\s*0*(\d{1,3})\b/i,
     /\b(?:season|series)\s*0*(\d{1,2})\D{0,24}(?:episode|ep)\s*0*(\d{1,3})\b/i,
     /\b(?:season|series)\s*0*(\d{1,2})\s*[-:]\s*(?:episode|ep)?\s*0*(\d{1,3})\b/i,
@@ -115,6 +116,18 @@ function ensurePlaylistStartSeasonControl(){
   select.style.display=allSeasons?'':'none';
 }
 
+function resetDetectedPlaylistRange(){
+  const option=document.getElementById('plSeason')?.selectedOptions?.[0];
+  if(option?.dataset?.sonarrLabel)option.textContent=option.dataset.sonarrLabel;
+}
+
+function showDetectedPlaylistRange(minSeason,maxSeason){
+  const option=document.getElementById('plSeason')?.selectedOptions?.[0];
+  if(!option||option.value!=='all-regular')return;
+  if(!option.dataset.sonarrLabel)option.dataset.sonarrLabel=option.textContent;
+  option.textContent=`${option.dataset.sonarrLabel} · Playlist ${minSeason}–${maxSeason}`;
+}
+
 const __v108RenderPlaylistMapper=window.renderPlaylistMapper;
 if(typeof __v108RenderPlaylistMapper==='function'){
   window.renderPlaylistMapper=function(context=null){
@@ -122,7 +135,10 @@ if(typeof __v108RenderPlaylistMapper==='function'){
     if(playlistState.family==='series'){
       const seasonSelect=document.getElementById('plSeason');
       if(seasonSelect){
-        seasonSelect.addEventListener('change',ensurePlaylistStartSeasonControl);
+        seasonSelect.addEventListener('change',()=>{
+          resetDetectedPlaylistRange();
+          ensurePlaylistStartSeasonControl();
+        });
         ensurePlaylistStartSeasonControl();
       }
     }
@@ -187,6 +203,7 @@ async function previewPlaylist(){
   const url=$('#plUrl')?.value.trim();
   if(!url)return toast('Paste a YouTube playlist URL','bad');
   $('#plPreviewPanel').innerHTML='<div class="empty">Reading YouTube playlist…</div>';
+  resetDetectedPlaylistRange();
 
   try{
     playlistState.playlist=await api('/api/youtube/playlist',{method:'POST',body:JSON.stringify({url})});
@@ -209,10 +226,11 @@ async function previewPlaylist(){
         if(entries.length&&exact.parsed===entries.length&&exact.matched>0){
           playlistState.mappings=exact.mappings;
           playlistState.targets=allTargets;
-          playlistState.targetCount=allTargets.length;
+          playlistState.targetCount=exact.mappings.length;
           const minSeason=Math.min(...exact.parsedSeasons);
           const maxSeason=Math.max(...exact.parsedSeasons);
-          playlistState.mappingNotice=`Detected explicit season/episode numbering in every playlist item. Mapping by episode token${Number.isFinite(minSeason)?` (Seasons ${minSeason}–${maxSeason})`:''}, not by playlist position.`;
+          if(Number.isFinite(minSeason)&&Number.isFinite(maxSeason))showDetectedPlaylistRange(minSeason,maxSeason);
+          playlistState.mappingNotice=`Detected explicit season/episode numbering in every playlist item. Mapping by episode token${Number.isFinite(minSeason)?` (playlist Seasons ${minSeason}–${maxSeason})`:''}, not by playlist position.`;
           renderPlaylistPreview();
           return;
         }
