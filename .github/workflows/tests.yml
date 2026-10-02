@@ -51,6 +51,7 @@ jobs:
           node --check backend/youtubarr/web/assets/app-v105-fixes.js
           node --check backend/youtubarr/web/assets/app-playlist-all-seasons.js
           node --check backend/youtubarr/web/assets/app-series-playlist-search.js
+          node --check backend/youtubarr/web/assets/app-v107-ui-fixes.js
 
       - name: Validate host scripts
         run: |
