@@ -1,0 +1,88 @@
+/* Youtubarr v1.0.9 - series library location dialog. */
+
+.arr-modal-overlay{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  background:rgba(0,0,0,.55);
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:9vh 24px 24px;
+}
+.arr-modal{
+  width:min(760px,96vw);
+  background:#fff;
+  border:1px solid #b9bdc5;
+  box-shadow:0 12px 36px rgba(0,0,0,.35);
+}
+.arr-modal-head{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:0 14px;
+  border-bottom:1px solid #cfd3da;
+  background:#f4f5f7;
+  font-size:16px;
+}
+.arr-modal-head .icon-btn{
+  font-size:24px;
+  line-height:1;
+}
+.arr-modal-body{padding:18px;}
+.arr-modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:18px;
+}
+.series-location-current{
+  display:grid;
+  grid-template-columns:150px 1fr;
+  gap:12px;
+  align-items:start;
+  margin:16px 0;
+}
+.series-location-current span,
+.series-location-label{font-weight:600;}
+.series-location-current code{
+  white-space:normal;
+  overflow-wrap:anywhere;
+  background:#f3f4f6;
+  border:1px solid #d7dae0;
+  padding:7px 9px;
+}
+.series-location-select{
+  display:block;
+  width:100%;
+  margin-top:7px;
+  min-height:36px;
+  border:1px solid #b9bdc5;
+  background:#fff;
+  padding:6px 8px;
+}
+.series-location-note{
+  margin-top:10px;
+  padding:10px 12px;
+  border-left:3px solid #ff0000;
+  background:#fafafa;
+  color:#555;
+}
+.series-location-warnings{
+  margin-top:8px;
+  color:#8a5b00;
+}
+.success-box{
+  margin-top:14px;
+  padding:12px;
+  border:1px solid #86bf8d;
+  background:#edf8ef;
+  color:#225d2b;
+}
+.success-box code{
+  display:block;
+  margin-top:7px;
+  overflow-wrap:anywhere;
+}
