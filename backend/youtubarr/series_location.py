@@ -21,7 +21,6 @@ from .security import decrypt_secret, require_user
 router = APIRouter(prefix="/api/series", tags=["series-location"])
 
 _YT_REMOTE_TV = "/youtube-library/tv"
-_YT_LOCAL_TV = "/library/tv"
 _TERMINAL = {"complete", "failed"}
 
 
@@ -63,8 +62,7 @@ def _series_folder_name(series: dict) -> str:
 
 
 def _episode_destination(local_series: Path, media: MediaItem, old_output: str) -> Path:
-    old = Path(old_output or "")
-    filename = old.name
+    filename = Path(old_output).name if old_output else ""
     if not filename:
         title = clean_name(media.title or f"Episode {media.episode_number}")
         show = clean_name(local_series.name or "Series")
@@ -130,10 +128,11 @@ def _current_root(series_path: str, roots: list[dict]) -> str:
 
 
 def _cleanup_empty_parents(paths: set[Path]) -> None:
+    """Remove empty season/show folders but preserve the category roots."""
     stop = (settings.library_dir / "tv").resolve(strict=False)
     for path in sorted(paths, key=lambda p: len(p.parts), reverse=True):
         current = path
-        while current != stop:
+        while current != stop and current.parent != stop:
             try:
                 current.rmdir()
             except OSError:
@@ -149,7 +148,7 @@ def _reconcile_late_outputs(pairs: list[tuple[str, str]], timeout_seconds: int =
     move request has completed.
     """
     deadline = time.monotonic() + timeout_seconds
-    pending = {(old, new) for old, new in pairs if old != new}
+    pending = {(old, new) for old, new in pairs if old and old != new}
     while pending and time.monotonic() < deadline:
         resolved: set[tuple[str, str]] = set()
         for old_s, new_s in list(pending):
@@ -173,12 +172,7 @@ def _reconcile_late_outputs(pairs: list[tuple[str, str]], timeout_seconds: int =
 
 
 def _rescan_series(series_id: int) -> None:
-    try:
-        _sonarr_raw_request("POST", "command", payload={"name": "RescanSeries", "seriesId": int(series_id)})
-    except HTTPException:
-        # The move itself is more important than a command-queue failure. The
-        # API response reports rescanQueued=False so the UI can tell the user.
-        raise
+    _sonarr_raw_request("POST", "command", payload={"name": "RescanSeries", "seriesId": int(series_id)})
 
 
 @router.get("/{series_id}/locations")
@@ -223,12 +217,13 @@ def change_series_location(series_id: int, body: SeriesLocationBody, _: User = D
         )
         plans: list[tuple[int, int, str, str]] = []
         for acquisition, media in rows:
-            old = Path(acquisition.output_path or media.path or "")
-            destination = _episode_destination(new_local_series, media, str(old))
-            if str(old) and old != destination and (destination.exists() or destination.is_symlink()):
+            old_s = str(acquisition.output_path or media.path or "")
+            old = Path(old_s) if old_s else None
+            destination = _episode_destination(new_local_series, media, old_s)
+            if old is not None and old != destination and (destination.exists() or destination.is_symlink()):
                 if not _same_symlink(old, destination):
                     raise HTTPException(409, f"Destination already contains a different file: {destination}")
-            plans.append((acquisition.id, media.id, str(old), str(destination)))
+            plans.append((acquisition.id, media.id, old_s, str(destination)))
 
     current_sonarr_path = str(series.get("path") or "").replace("\\", "/").rstrip("/")
     if current_sonarr_path != new_remote_series:
@@ -254,11 +249,11 @@ def change_series_location(series_id: int, body: SeriesLocationBody, _: User = D
             media = db.get(MediaItem, media_id)
             if not acquisition or not media:
                 continue
-            old = Path(old_s) if old_s else Path()
+            old = Path(old_s) if old_s else None
             new = Path(new_s)
             ensure_library_path_permissions(new.parent)
 
-            if old_s and old != new and (old.exists() or old.is_symlink()):
+            if old is not None and old != new and (old.exists() or old.is_symlink()):
                 old_parents.add(old.parent)
                 if new.exists() or new.is_symlink():
                     if _same_symlink(old, new):
