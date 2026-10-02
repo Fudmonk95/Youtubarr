@@ -2,34 +2,32 @@
 
 **YouTube acquisition for an Arr-managed media library.**
 
-Youtubarr is a self-hosted companion for **Sonarr**, **Lidarr** and optional **Radarr**. It is designed to feel like another Arr application while using YouTube as an additional source for old, rare or otherwise difficult-to-find media.
+Youtubarr is a self-hosted companion for **Sonarr**, **Lidarr** and optional **Radarr**. It is designed to behave like another Arr application while using YouTube as an additional source for old, rare or otherwise difficult-to-find media.
 
-The interface follows familiar Arr patterns: poster libraries, `Add New`, `Library Import`, `Calendar`, `Activity`, `Wanted`, Arr-style settings pages, queues, history and system status. Youtubarr uses **YouTube red** for its own identity while preserving the general Arr information architecture.
-
-> Sonarr, Lidarr and Radarr remain authoritative for media identity, metadata, monitoring, seasons, episodes, albums and tracks. Youtubarr additionally tracks whether it has successfully created a verified virtual media file of its own.
+Sonarr, Lidarr and Radarr remain the source of truth for media identity, metadata, monitoring, seasons, episodes, albums and tracks. Youtubarr adds YouTube discovery, playlist mapping, virtual FUSE media and a symlink library without replacing the Arr applications.
 
 ## Current release
 
 ```text
-v1.0.7
+v1.0.8
 ```
 
-Highlights in v1.0.7:
+### v1.0.8 highlights
 
-- Arr-style toolbar menus are mutually exclusive: opening `View`, `Sort`, `Options` or `Filter` closes the previous menu.
-- Series poster cards show a real episode-availability progress bar instead of the old monitored-corner marker.
-- Season headers show a Sonarr-style count and progress bar.
-- Progress includes both Arr-registered files and verified Youtubarr files.
-- Series-level and season-level YouTube playlist hard search.
-- `Use Playlist` carries the selected series, season scope and playlist URL into Import Lists.
-- `All Seasons (x-y)` mapping for complete-series playlists.
-- Youtubarr library permissions are repaired on every container start for Sonarr/Lidarr/Radarr access.
+- Series opens in an **Incomplete** working view by default.
+- Fully available series can still be shown with **Filter → Complete** or **Filter → All**.
+- Complete poster/season progress bars are green; incomplete progress keeps the YouTube-red identity.
+- `All Seasons` playlist mapping no longer assumes a playlist starts at Season 1.
+- Youtubarr recognises common episode tokens including `S03E01`, `3x01`, `Season 3 Episode 1` and `Series 3 Episode 1`.
+- When every playlist item exposes an episode token, mapping is by the exact Sonarr season/episode number rather than playlist position.
+- Partial/non-contiguous playlists are therefore supported when their titles contain season/episode numbering.
+- When titles are ambiguous, `All Seasons` exposes **Start mapping at season** and **Start mapping at episode** so a playlist beginning at Season 3 can be mapped from `S03E01` instead of `S01E01`.
+- The playlist preview tells you whether exact-token mapping or sequential fallback is being used.
+- Existing Youtubarr availability, FUSE, permissions and Arr-style UI behaviour remain intact.
 
-# What Youtubarr is for
+# What Youtubarr does
 
-Youtubarr is aimed mainly at **series and music** already known to Sonarr or Lidarr but difficult to source through normal torrent or Usenet workflows. Movies are optional and disabled by default.
-
-Typical flow:
+Typical TV workflow:
 
 ```text
 Sonarr reports an episode missing
@@ -38,34 +36,39 @@ Youtubarr reads Sonarr metadata
         ↓
 Search YouTube / search playlists / paste a URL
         ↓
-Choose or map a source
+Review or map the source
         ↓
-Youtubarr creates a virtual media asset through FUSE
+Youtubarr exposes a virtual media file through FUSE
         ↓
 A Linux symlink is created in the Youtubarr library
         ↓
-Jellyfin / Sonarr / Lidarr read the media through the shared mount
+Jellyfin / Sonarr / Lidarr can read the media
 ```
 
 Youtubarr supports:
 
-- progressive YouTube formats containing audio and video;
-- separate video/audio streams through a bounded transient remux cache where needed;
-- audio-focused sources for Lidarr;
-- seekable byte-range reads through the FUSE filesystem;
-- Linux symlink library entries instead of permanently duplicating media;
-- individual target-aware YouTube searches;
-- direct YouTube URL acquisition;
-- ordered playlist mapping to Sonarr episodes and Lidarr tracks;
-- complete-series playlist mapping across multiple seasons;
-- series/season playlist hard search;
-- verified local availability independent of Arr registration state.
+- Series through Sonarr.
+- Music through Lidarr.
+- Optional Movies through Radarr.
+- Individual YouTube searches.
+- Direct YouTube URL acquisition.
+- Series-level and season-level playlist search.
+- Ordered YouTube playlist mapping.
+- Multi-season playlist mapping.
+- Partial multi-season playlist mapping.
+- Progressive MP4 sources.
+- Split audio/video remux when required.
+- Music-focused audio sources.
+- FUSE virtual media.
+- Linux symlink libraries.
+- Persistent acquisition history.
+- Combined Arr + Youtubarr availability reporting.
 
 # Availability states
 
-Youtubarr does not rely only on the connected Arr application's `hasFile` flag.
+Youtubarr does not rely only on an Arr application's `hasFile` flag.
 
-An episode/track/movie can be shown as:
+Media can be shown as:
 
 ```text
 Missing
@@ -75,15 +78,15 @@ Registered
 
 **Missing** means neither the Arr application nor Youtubarr has a usable file.
 
-**Found by Youtubarr** means a Youtubarr acquisition completed and its library symlink still resolves to a live FUSE asset. Jellyfin can use the media even if Sonarr/Lidarr has not registered it yet.
+**Found by Youtubarr** means the Youtubarr acquisition completed and the generated library symlink still resolves to a live FUSE asset.
 
-**Registered** means the connected Arr application itself reports the file as present.
+**Registered** means the connected Arr application itself reports the media as present.
 
-Verified Youtubarr media is removed from **Wanted → Missing** so Youtubarr does not repeatedly search for content it already has.
+Verified Youtubarr media is excluded from Youtubarr's Wanted/Missing view so it is not repeatedly searched for.
 
-## Progress bars
+## Series progress
 
-Series poster cards and season headers use the combined Youtubarr view.
+Series poster cards and season headers use the combined availability view.
 
 Example:
 
@@ -93,7 +96,18 @@ Youtubarr verified:    13 / 13
 Youtubarr UI progress: 13 / 13
 ```
 
-Youtubarr preserves Sonarr's original count separately and does not write fake values back to Sonarr.
+Complete series use a green progress bar.
+
+The default Series filter is **Incomplete**, so a fully available show drops out of the normal working list. It remains available under:
+
+```text
+Filter
+├─ Incomplete
+├─ Complete
+├─ All
+├─ Monitored
+└─ Unmonitored
+```
 
 # Interface
 
@@ -105,7 +119,7 @@ Series
 └─ Library Import
 ```
 
-The Series toolbar includes:
+The Series toolbar follows Arr-style controls:
 
 - Update Filtered
 - RSS Sync
@@ -116,24 +130,22 @@ The Series toolbar includes:
 - Sort
 - Filter
 
-Only one toolbar popover is displayed at a time. Clicking elsewhere or pressing `Escape` closes it.
+Only one toolbar popover can be open at a time. Opening another menu closes the previous one; clicking outside or pressing `Escape` closes the menu.
 
-Poster cards show a horizontal availability bar at the bottom of the artwork plus an `available / total` count. The old red monitored corner is not used as a progress indicator.
-
-Open a series to see seasons and episodes. Every season shows:
+Open a series to see seasons and episodes. Season headers show combined availability:
 
 ```text
 Season 1       13 / 13
 ████████████████████
 ```
 
-The count treats both **Registered** and **Found by Youtubarr** episodes as available.
+Each season also has a YouTube playlist search action.
 
-## Series playlist hard search
+## Playlist hard search
 
-From a series page use **Search Playlists** to search YouTube specifically for playlists for the whole programme.
+From a series page, use **Search Playlists** to search YouTube for playlists for the whole programme.
 
-Each season also has a playlist-search button for a season-specific search.
+A season-level playlist search can search for a specific season.
 
 Examples:
 
@@ -142,29 +154,120 @@ Wolfblood full series complete episodes playlist
 Wolfblood season 3 full episodes playlist
 ```
 
-Search results can be opened on YouTube or sent directly into Import Lists with **Use Playlist**.
+**Use Playlist** carries the selected series, season scope and playlist URL into Import Lists.
 
-When `Use Playlist` is selected, Youtubarr carries:
+# YouTube playlist mapping
 
-- the Sonarr series;
-- `All Seasons` or the selected season;
-- the playlist URL.
+Open:
 
-into the playlist mapper automatically.
+**Settings → Import Lists**
 
-## Music
+## Single season
 
-Music uses Lidarr metadata and the same availability model:
+1. Select **Series / Sonarr**.
+2. Choose the Sonarr series.
+3. Choose a season.
+4. Paste the YouTube playlist URL.
+5. Set **Start mapping at episode** if required.
+6. Keep **Only missing targets** enabled when appropriate.
+7. Click **Load & Preview Playlist**.
+8. Review every mapping.
+9. Queue the selected rows.
+
+## All Seasons
+
+If Sonarr exposes more than one regular season, Youtubarr dynamically adds an All Seasons option.
+
+Example:
 
 ```text
-Missing
-Found by Youtubarr
-Registered
+All Seasons (1–5)
+Season 0 (Specials)
+Season 1
+Season 2
+Season 3
+Season 4
+Season 5
 ```
 
-Tracks can be searched individually or mapped from a YouTube playlist.
+`All Seasons` deliberately excludes Season 0/Specials.
 
-## Activity
+### Important: Sonarr's season range is not the playlist's season range
+
+`All Seasons (1–21)` means **Sonarr knows the show has Seasons 1 through 21**. It does **not** mean the selected YouTube playlist necessarily contains Seasons 1 through 21.
+
+A playlist may contain only:
+
+```text
+Season 3 → Season 21
+```
+
+or even a non-contiguous subset.
+
+Youtubarr v1.0.8 handles this in two ways.
+
+### Exact-token mapping
+
+When every YouTube title contains season/episode information, Youtubarr maps by that token instead of playlist position.
+
+Recognised examples include:
+
+```text
+Show Name S03E01
+Show Name 3x01
+Show Name Season 3 Episode 1
+Show Name Series 3 Episode 1
+```
+
+So:
+
+```text
+YouTube: Series 3 Episode 1 → Sonarr: S03E01
+YouTube: Series 3 Episode 2 → Sonarr: S03E02
+...
+YouTube: Series 21 Episode 8 → Sonarr: S21E08
+```
+
+No fake Season 1 or Season 2 mapping is introduced just because Sonarr has those seasons.
+
+### Sequential fallback
+
+Some old YouTube playlists use generic titles such as:
+
+```text
+Episode 1
+Episode 2
+Episode 3
+```
+
+When Youtubarr cannot reliably determine season/episode numbers from every playlist item, it refuses to silently guess that the playlist begins at Season 1.
+
+For **All Seasons**, use:
+
+```text
+Start mapping at season:  3
+Start mapping at episode: 1
+```
+
+The preview will then begin at:
+
+```text
+S03E01
+```
+
+and continue through Sonarr's ordered episode list.
+
+Always review the preview before queuing. The preview states whether Youtubarr is using **detected episode tokens** or **sequential mapping**.
+
+### Only missing targets
+
+When **Only missing targets** is enabled, existing episodes are skipped in place. Their removal does not shift every later YouTube item onto the wrong Sonarr episode.
+
+# Music playlist mapping
+
+Select **Music / Lidarr**, choose an artist and album, paste/load the playlist, review playlist-position → Lidarr-track mappings and queue the selected tracks.
+
+# Activity
 
 ```text
 Activity
@@ -173,7 +276,7 @@ Activity
 └─ Blocklist
 ```
 
-## Wanted
+# Wanted
 
 ```text
 Wanted
@@ -181,11 +284,11 @@ Wanted
 └─ Cutoff Unmet
 ```
 
-For Sonarr, Missing groups episodes by series and displays poster artwork, series title, season/episode information and search actions.
+For Sonarr, Missing groups episodes by series and shows series artwork, episode information and search actions.
 
-Verified Youtubarr media is excluded from Youtubarr's Missing view even if Sonarr is still waiting for a scan.
+Verified Youtubarr media is excluded from Youtubarr's Missing view even if Sonarr has not registered the file yet.
 
-## Settings
+# Settings
 
 ```text
 Settings
@@ -204,104 +307,31 @@ Settings
 └─ UI
 ```
 
-# YouTube playlist mapping
-
-Open **Settings → Import Lists**.
-
-## Single season
-
-1. Select **Series / Sonarr**.
-2. Choose the Sonarr series.
-3. Choose the season.
-4. Paste the YouTube playlist URL.
-5. Optionally keep **Only missing targets** enabled.
-6. Click **Load & Preview Playlist**.
-7. Review every mapping.
-8. Select the desired rows.
-9. Click **Queue Selected Mappings**.
-
-Example:
-
-```text
-YouTube item 1 → Jeopardy S01E01
-YouTube item 2 → Jeopardy S01E02
-YouTube item 3 → Jeopardy S01E03
-```
-
-## Complete-series playlist
-
-When Sonarr reports more than one regular season, Youtubarr dynamically adds an All Seasons option.
-
-Example for Wolfblood:
-
-```text
-All Seasons (1–5)
-Season 0 (Specials)
-Season 1
-Season 2
-Season 3
-Season 4
-Season 5
-```
-
-`All Seasons` deliberately excludes Season 0/Specials.
-
-Targets are ordered by:
-
-```text
-Season number
-    ↓
-Episode number
-```
-
-so a complete-series playlist maps sequentially from `S01E01` through the final regular-season episode.
-
-When **Only missing targets** is enabled, existing episodes are skipped **in place**. Later playlist items are not shifted onto the wrong Sonarr episodes.
-
-Always review the preview before queuing, especially when the YouTube playlist item count differs from Sonarr's episode count.
-
-## Music playlist mapping
-
-Select **Music / Lidarr**, choose the artist and album, load the YouTube playlist, review playlist-position → Lidarr-track mapping, then queue the selected tracks.
-
 # Recommended deployment: Portainer Web Editor
 
-The recommended installation method is:
+The recommended deployment is:
 
 **Portainer → Stacks → Add stack → Web editor → paste Compose → Deploy the stack**
 
-Portainer does not need to clone or build the repository. GitHub Actions publishes:
+GitHub Actions publishes:
 
 ```text
 ghcr.io/fudmonk95/youtubarr:latest
 ```
 
-Youtubarr is **one stack and one container**.
+Youtubarr is **one stack and one container**. There is no FUSE sidecar.
 
-```text
-Youtubarr container
-├─ FastAPI backend
-├─ Arr integrations
-├─ web UI
-├─ yt-dlp
-├─ ffmpeg / ffprobe
-├─ acquisition workers
-└─ FUSE filesystem
-```
+## Requirements
 
-There is no Youtubarr FUSE sidecar.
+The Docker host needs:
 
-# Requirements
-
-The Docker host must provide:
-
-- Docker / Portainer;
-- `/dev/fuse`;
-- `SYS_ADMIN`;
-- unconfined AppArmor for the Youtubarr container;
-- `/mnt/youtubarr` with shared mount propagation;
-- persistent config/library/cache directories;
-- network connectivity to Sonarr and Lidarr, and optionally Radarr.
+- Docker / Portainer.
+- `/dev/fuse`.
+- `SYS_ADMIN`.
+- Unconfined AppArmor for the Youtubarr container.
+- `/mnt/youtubarr` with shared propagation.
+- Persistent config/library/cache folders.
+- Network connectivity to Sonarr and Lidarr and optional Radarr.
 
 Recommended host paths:
 
@@ -312,18 +342,12 @@ Recommended host paths:
 /mnt/youtubarr
 ```
 
-# 1. Prepare persistent directories
+## Host preparation
 
 ```bash
 mkdir -p /mnt/appdata/Youtubarr/{config,library,cache}
 chown -R 1001:1001 /mnt/appdata/Youtubarr
 ```
-
-The container repairs `/library` permissions itself at startup; no host ACL package is required for the normal deployment.
-
-# 2. Prepare `/mnt/youtubarr`
-
-The path must be a shared mount so the nested FUSE filesystem created inside Youtubarr propagates back to the Docker/LXC host.
 
 When the repository exists at `/opt/youtubarr`:
 
@@ -333,28 +357,15 @@ chmod +x scripts/*.sh
 ./scripts/install-host.sh
 ```
 
-Verify before container startup:
+Verify:
 
 ```bash
 findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS,PROPAGATION /mnt/youtubarr
 ```
 
-Expected backing mount:
+The backing mount should be shared.
 
-```text
-/mnt/youtubarr ... ext4 ... shared
-```
-
-After Youtubarr starts:
-
-```text
-/mnt/youtubarr ... ext4          shared
-/mnt/youtubarr YoutubarrFS fuse shared
-```
-
-# 3. Portainer stack
-
-In Portainer choose **Stacks → Add stack → Web editor** and paste:
+# Portainer stack
 
 ```yaml
 services:
@@ -368,11 +379,10 @@ services:
     environment:
       TZ: Europe/London
 
-      # Youtubarr library owner
       PUID: "1001"
       PGID: "1001"
 
-      # Sonarr / Lidarr / Radarr user and group inside DUMB
+      # Sonarr / Lidarr / Radarr identity inside DUMB
       ARR_UID: "1000"
       ARR_GID: "1000"
 
@@ -414,23 +424,65 @@ networks:
     name: dumb-live_default
 ```
 
-## PUID/PGID versus ARR_UID/ARR_GID
+# DUMB / Jellyfin / Arr mounts
 
-```text
-PUID / PGID       owner identity used by Youtubarr
-ARR_UID / ARR_GID user/group used by Sonarr/Lidarr/Radarr
+Add these mounts to the existing DUMB service:
+
+```yaml
+      - type: bind
+        source: /mnt/youtubarr
+        target: /mnt/youtubarr
+        bind:
+          propagation: rslave
+
+      - /mnt/appdata/Youtubarr/library:/youtube-library
 ```
 
-On the documented DUMB installation:
+This gives DUMB/Jellyfin/Arr applications:
 
 ```text
-Youtubarr: 1001:1001
-Arr user:   1000:1000 (ubuntu)
+/youtube-library/tv
+/youtube-library/music
+/youtube-library/movies
 ```
 
-At **every Youtubarr container start**, the complete `/library` tree is repaired automatically.
+and the propagated virtual targets under:
 
-Directories are assigned the Arr group and mode:
+```text
+/mnt/youtubarr/tv
+/mnt/youtubarr/music
+/mnt/youtubarr/movies
+```
+
+Recommended roots:
+
+```text
+Sonarr: /youtube-library/tv
+Lidarr: /youtube-library/music
+Radarr: /youtube-library/movies
+```
+
+Youtubarr automatically understands the equivalent container paths:
+
+```text
+Arr / DUMB                         Youtubarr
+/youtube-library/tv/...      →     /library/tv/...
+/youtube-library/music/...   →     /library/music/...
+/youtube-library/movies/...  →     /library/movies/...
+```
+
+# Permissions
+
+Youtubarr repairs its complete `/library` tree **every time the container starts**.
+
+With the documented values:
+
+```text
+Youtubarr owner: 1001:1001
+Arr user/group:  1000:1000
+```
+
+Directories are repaired with the Arr group and setgid mode:
 
 ```text
 2775
@@ -442,8 +494,6 @@ Regular files use:
 0664
 ```
 
-Youtubarr symlinks remain symlinks. New directories also inherit the shared Arr group through the setgid directory bit.
-
 This applies to:
 
 ```text
@@ -452,56 +502,43 @@ This applies to:
 /library/movies
 ```
 
-and every mapped subfolder underneath them.
+and every subfolder Youtubarr creates later.
 
-`/mnt/youtubarr` remains a read-only FUSE filesystem. Arr applications and Jellyfin only need to read the virtual targets; `/library` is the writable symlink tree.
+`/mnt/youtubarr` remains a read-only FUSE filesystem. Arr applications and Jellyfin only need to read those targets; `/library` is the writable symlink tree.
 
-# 4. DUMB / Jellyfin / Arr access
+# First-run setup
 
-Add these mounts to the existing **DUMB** service:
-
-```yaml
-      # Receive Youtubarr's propagated FUSE filesystem.
-      - type: bind
-        source: /mnt/youtubarr
-        target: /mnt/youtubarr
-        bind:
-          propagation: rslave
-
-      # Youtubarr's generated symlink library.
-      - /mnt/appdata/Youtubarr/library:/youtube-library
-```
-
-Path flow:
+Open:
 
 ```text
-/youtube-library/tv/Example Show/Season 01/Example Show - S01E01.mp4
-                   ↓ symlink
-/mnt/youtubarr/tv/<asset-id>.mp4
-                   ↓ FUSE
-YouTube
+http://YOUR_DOCKER_HOST:8788
 ```
 
-Recommended Arr roots:
+A fresh installation asks you to:
+
+1. Create an administrator username/password.
+2. Enable Series and/or Music.
+3. Optionally enable Movies.
+4. Connect Sonarr/Lidarr/optional Radarr.
+5. Generate root mappings.
+
+Defaults:
 
 ```text
-/youtube-library/tv      → Sonarr
-/youtube-library/music   → Lidarr
-/youtube-library/movies  → optional Radarr
+Series  ON
+Music   ON
+Movies  OFF
 ```
 
-Youtubarr automatically understands these equivalent container paths:
+On the documented DUMB network:
 
 ```text
-Arr / DUMB                         Youtubarr
-/youtube-library/tv/...      →     /library/tv/...
-/youtube-library/music/...   →     /library/music/...
-/youtube-library/movies/...  →     /library/movies/...
+Sonarr: http://DUMB-live:8989
+Lidarr: http://DUMB-live:8686
+Radarr: http://DUMB-live:7878
 ```
 
-No separate saved root mapping is required for media already under `/youtube-library`.
-
-# 5. Verify container and FUSE state
+# Verify installation
 
 ```bash
 docker ps --filter "name=youtubarr"
@@ -510,13 +547,7 @@ cat /mnt/youtubarr/.youtubarr.json
 docker logs --tail=100 youtubarr
 ```
 
-Expected container state:
-
-```text
-Up ... (healthy)
-```
-
-Verify the shared library as the actual Arr user inside DUMB:
+Verify the actual Arr user can use the library:
 
 ```bash
 docker exec -u ubuntu DUMB-live sh -lc '
@@ -530,130 +561,32 @@ docker exec -u ubuntu DUMB-live sh -lc '
 '
 ```
 
-# First-run setup
-
-Open:
-
-```text
-http://YOUR_DOCKER_HOST:8788
-```
-
-A fresh installation asks you to:
-
-1. create an administrator username/password;
-2. enable Series and/or Music;
-3. optionally enable Movies;
-4. connect Sonarr/Lidarr/optional Radarr;
-5. generate root mappings.
-
-Defaults:
-
-```text
-Series  ON
-Music   ON
-Movies  OFF
-```
-
-When Youtubarr and DUMB share `dumb-live_default`:
-
-```text
-Sonarr: http://DUMB-live:8989
-Lidarr: http://DUMB-live:8686
-Radarr: http://DUMB-live:7878
-```
-
-# Individual YouTube acquisition
-
-For an individual missing episode:
-
-1. Open **Series** or **Wanted → Missing**.
-2. Click the magnifying-glass button beside the episode.
-3. Youtubarr searches using series + season/episode + episode-title context.
-4. Review the result.
-5. Click **Grab**.
-
-Or paste a known YouTube video URL and use **Grab URL**.
-
-The acquisition appears under **Activity → Queue** and moves to History after the FUSE asset and symlink are complete.
-
-# Arr registration
-
-Youtubarr local availability and Arr registration are intentionally separate.
-
-A completed virtual media file is immediately shown as **Found by Youtubarr**. To have Sonarr/Lidarr display it as one of their own files, the corresponding `/youtube-library/...` root/path must also be configured in the Arr application and scanned/imported using that application's normal workflow.
-
-This keeps the UI truthful: Youtubarr does not claim Sonarr/Lidarr registered a file merely because Jellyfin can already play it.
-
 # Updating Youtubarr
 
-Pull the latest image on the Docker host:
+If Portainer cannot pull GHCR anonymously, pull the image first on the Docker host:
 
 ```bash
 docker logout ghcr.io 2>/dev/null || true
 docker pull ghcr.io/fudmonk95/youtubarr:latest
 ```
 
-Then use:
+Then:
 
 **Portainer → Stacks → youtubarr → Editor → Update the stack**
 
-If the image was pulled manually, do not force Portainer to re-pull it when Portainer has stored/invalid GHCR credentials.
+Do not force a Portainer re-pull when you already pulled the image manually.
 
-Persistent configuration and database data remain under:
-
-```text
-/mnt/appdata/Youtubarr
-```
-
-After an update verify:
+Verify:
 
 ```bash
 curl -s http://127.0.0.1:8788/api/bootstrap
 docker logs --tail=100 youtubarr
 ```
 
-Then hard-refresh the browser (`Ctrl+F5`) when the release includes frontend changes.
+After an interface update, hard-refresh the browser (`Ctrl+F5`).
 
-# Diagnostics
+# Important design rule
 
-```bash
-docker ps --filter "name=youtubarr"
-docker logs --tail=200 youtubarr
-ls -l /dev/fuse
-findmnt -R -o TARGET,SOURCE,FSTYPE,OPTIONS,PROPAGATION /mnt/youtubarr
-cat /mnt/youtubarr/.youtubarr.json
-```
+Youtubarr is not intended to replace Sonarr or Lidarr.
 
-When the repository exists at `/opt/youtubarr`:
-
-```bash
-cd /opt/youtubarr
-./scripts/doctor.sh
-```
-
-# Security
-
-- No baked-in administrator credentials.
-- Arr API keys are stored encrypted in persistent configuration.
-- Do not commit live `/config`, databases, credentials or API keys.
-- Use normal authentication/reverse-proxy protections if exposing Youtubarr remotely.
-
-# Development validation
-
-```bash
-PYTHONPATH=backend pytest -q
-python -m compileall -q backend/youtubarr
-node --check backend/youtubarr/web/assets/app.js
-node --check backend/youtubarr/web/assets/app-arr-shell.js
-node --check backend/youtubarr/web/assets/app-arr-pages.js
-node --check backend/youtubarr/web/assets/app-youtube-fixes.js
-node --check backend/youtubarr/web/assets/app-availability.js
-node --check backend/youtubarr/web/assets/app-v105-fixes.js
-node --check backend/youtubarr/web/assets/app-playlist-all-seasons.js
-node --check backend/youtubarr/web/assets/app-series-playlist-search.js
-node --check backend/youtubarr/web/assets/app-v107-ui-fixes.js
-```
-
-# Licence
-
-See `LICENSE`.
+The Arr services remain responsible for metadata and library identity. Youtubarr provides an additional YouTube acquisition route and a virtual media layer for content that is otherwise difficult to obtain.
