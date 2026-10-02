@@ -6,7 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 from fastapi import HTTPException
 from yt_dlp import YoutubeDL
@@ -68,6 +68,61 @@ def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
                 "viewCount": entry.get("view_count") or 0,
             }
         )
+    return results
+
+
+def search_playlists(query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Search YouTube's playlist-only results page and return flat playlist rows."""
+    query = query.strip()
+    if not query:
+        return []
+
+    opts = _ydl_opts(flat=True)
+    opts["noplaylist"] = False
+    opts["playlistend"] = max(1, min(limit, 50))
+    # YouTube's Playlist search filter. yt-dlp's YoutubeTab extractor can read
+    # this page without requiring a YouTube Data API key.
+    url = f"https://www.youtube.com/results?search_query={quote_plus(query)}&sp=EgIQAw%253D%253D"
+
+    try:
+        with YoutubeDL(opts) as ydl:
+            data = ydl.extract_info(url, download=False)
+    except Exception as exc:
+        message = re.sub(r"https?://[^\s]+", "[url hidden]", str(exc))
+        raise HTTPException(502, f"YouTube playlist search failed: {message[:300]}") from exc
+
+    results: list[dict[str, Any]] = []
+    for entry in data.get("entries") or []:
+        if not entry:
+            continue
+        playlist_id = str(entry.get("id") or "").strip()
+        raw_url = str(entry.get("webpage_url") or entry.get("url") or "").strip()
+        if raw_url.startswith("/"):
+            raw_url = "https://www.youtube.com" + raw_url
+        if not raw_url and playlist_id:
+            raw_url = f"https://www.youtube.com/playlist?list={playlist_id}"
+        if not raw_url:
+            continue
+        # The filtered search should only return playlists, but keep this guard
+        # so a future YouTube extractor change does not surface video rows here.
+        if "playlist?list=" not in raw_url and not entry.get("playlist_count") and not entry.get("entry_count"):
+            continue
+        thumbs = entry.get("thumbnails") or []
+        thumbnail = entry.get("thumbnail") or ""
+        if not thumbnail and thumbs:
+            thumbnail = (thumbs[-1] or {}).get("url") or ""
+        results.append(
+            {
+                "id": playlist_id,
+                "title": entry.get("title") or playlist_id or "YouTube playlist",
+                "url": raw_url,
+                "channel": entry.get("channel") or entry.get("uploader") or entry.get("channel_name") or "",
+                "itemCount": entry.get("playlist_count") or entry.get("entry_count") or 0,
+                "thumbnail": thumbnail,
+            }
+        )
+        if len(results) >= max(1, min(limit, 50)):
+            break
     return results
 
 
