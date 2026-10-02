@@ -109,3 +109,31 @@ def test_wanted_missing_filters_verified_youtubarr_media(monkeypatch):
     result = availability.filter_missing_payload("episode", payload)
     assert [row["id"] for row in result["records"]] == [43]
     assert result["totalRecords"] == 1
+
+
+def test_series_progress_includes_verified_youtubarr_episodes(monkeypatch):
+    monkeypatch.setattr(availability, "completed_parent_counts", lambda kind: {154: 13})
+    row = availability.overlay_series_progress([
+        {
+            "id": 154,
+            "title": "Jeopardy (2002)",
+            "statistics": {"episodeCount": 13, "episodeFileCount": 0, "totalEpisodeCount": 13},
+        }
+    ])[0]
+    assert row["arrEpisodeFileCount"] == 0
+    assert row["youtubarrEpisodeFileCount"] == 13
+    assert row["availableEpisodeCount"] == 13
+    assert row["availabilityPercent"] == 100.0
+    assert row["fullyAvailable"] is True
+
+
+def test_series_progress_does_not_double_count_registered_youtubarr_media(monkeypatch):
+    monkeypatch.setattr(availability, "completed_parent_counts", lambda kind: {154: 13})
+    row = availability.overlay_series_progress([
+        {
+            "id": 154,
+            "statistics": {"episodeCount": 13, "episodeFileCount": 13, "totalEpisodeCount": 13},
+        }
+    ])[0]
+    assert row["availableEpisodeCount"] == 13
+    assert row["availabilityPercent"] == 100.0
