@@ -9,21 +9,20 @@ Sonarr, Lidarr and Radarr remain the source of truth for media identity, metadat
 ## Current release
 
 ```text
-v1.0.8
+v1.0.9
 ```
 
-### v1.0.8 highlights
+### v1.0.9 highlights
 
-- Series opens in an **Incomplete** working view by default.
-- Fully available series can still be shown with **Filter → Complete** or **Filter → All**.
-- Complete poster/season progress bars are green; incomplete progress keeps the YouTube-red identity.
-- `All Seasons` playlist mapping no longer assumes a playlist starts at Season 1.
-- Youtubarr recognises common episode tokens including `S03E01`, `3x01`, `Season 3 Episode 1` and `Series 3 Episode 1`.
-- When every playlist item exposes an episode token, mapping is by the exact Sonarr season/episode number rather than playlist position.
-- Partial/non-contiguous playlists are therefore supported when their titles contain season/episode numbering.
-- When titles are ambiguous, `All Seasons` exposes **Start mapping at season** and **Start mapping at episode** so a playlist beginning at Season 3 can be mapped from `S03E01` instead of `S01E01`.
-- The playlist preview tells you whether exact-token mapping or sequential fallback is being used.
-- Existing Youtubarr availability, FUSE, permissions and Arr-style UI behaviour remain intact.
+- Series can now be moved between Youtubarr/Sonarr TV roots from the Youtubarr series page with **Change Location**.
+- Moving a series moves the existing Youtubarr symlink tree only; the underlying FUSE/YouTube assets are not downloaded again.
+- Existing acquisition `output_path` records and media paths are rewritten to the new root.
+- Sonarr's series path/root is updated without asking Sonarr to physically move the Youtubarr files, then a Sonarr rescan is queued.
+- Selecting the current root performs a **repair**. This fixes cases where the Sonarr path was changed manually but completed Youtubarr symlinks are still under the previous root.
+- Active/queued acquisitions have their destination records updated and Youtubarr temporarily watches for a worker that finishes against the old path during the move.
+- The location selector only offers TV roots that Sonarr has actually configured below `/youtube-library/tv`.
+- The repository `VERSION` file is kept in sync with the application version.
+- v1.0.8 complete/incomplete filtering, playlist range detection and partial multi-season mapping remain included.
 
 # What Youtubarr does
 
@@ -56,6 +55,7 @@ Youtubarr supports:
 - Ordered YouTube playlist mapping.
 - Multi-season playlist mapping.
 - Partial multi-season playlist mapping.
+- Series library relocation/repair between Youtubarr TV roots.
 - Progressive MP4 sources.
 - Split audio/video remux when required.
 - Music-focused audio sources.
@@ -109,6 +109,8 @@ Filter
 └─ Unmonitored
 ```
 
+This is important when managing a completed series: if it has disappeared from the default grid, choose **Filter → All** or **Filter → Complete** to open it again.
+
 # Interface
 
 ## Series
@@ -140,6 +142,78 @@ Season 1       13 / 13
 ```
 
 Each season also has a YouTube playlist search action.
+
+## Changing a series library location
+
+A Youtubarr series can be moved between Sonarr roots without reacquiring the YouTube media.
+
+Typical roots are:
+
+```text
+/youtube-library/tv/kids
+/youtube-library/tv/shows
+/youtube-library/tv/bbc
+/youtube-library/tv/amazon
+/youtube-library/tv/appletv
+```
+
+These roots must first exist as **Sonarr Root Folders**. Youtubarr deliberately does not invent a Sonarr root that Sonarr does not know about.
+
+Open the series and choose:
+
+**Change Location**
+
+Then select the destination root.
+
+Example:
+
+```text
+/youtube-library/tv/shows/ChuckleVision
+                    ↓
+/youtube-library/tv/kids/ChuckleVision
+```
+
+Youtubarr performs the following operation:
+
+```text
+Existing /library/tv/shows/... symlinks
+        ↓ move only the symlinks
+/library/tv/kids/...
+        ↓
+Update Youtubarr acquisition output paths
+        ↓
+Update the Sonarr series path/root
+        ↓
+Queue Sonarr RescanSeries
+```
+
+The corresponding FUSE targets remain unchanged:
+
+```text
+/mnt/youtubarr/tv/<asset-id>.mp4
+```
+
+so no YouTube content is downloaded again.
+
+### Repairing a manually moved Sonarr series
+
+If the root was changed directly in Sonarr first, select the same/current root in Youtubarr and click **Move / Repair Series**.
+
+Example:
+
+```text
+Sonarr already says:
+/youtube-library/tv/kids/Wolfblood
+
+but old Youtubarr links still exist under:
+/library/tv/shows/Wolfblood
+```
+
+Selecting `kids` again makes Youtubarr move/repair the existing symlinks and database paths, then asks Sonarr to rescan.
+
+### Moving while acquisitions are active
+
+Youtubarr updates queued/in-progress acquisition destination records immediately. It also starts a temporary reconciliation watcher for an already-running worker that may have cached the old path a moment before the move. This allows a series such as ChuckleVision to be reassigned while a large playlist is still working through the queue.
 
 ## Playlist hard search
 
@@ -204,7 +278,7 @@ Season 3 → Season 21
 
 or even a non-contiguous subset.
 
-Youtubarr v1.0.8 handles this in two ways.
+Youtubarr handles this in two ways.
 
 ### Exact-token mapping
 
@@ -229,6 +303,12 @@ YouTube: Series 21 Episode 8 → Sonarr: S21E08
 ```
 
 No fake Season 1 or Season 2 mapping is introduced just because Sonarr has those seasons.
+
+When a complete playlist exposes explicit numbering, the preview also reports the detected source range, for example:
+
+```text
+All Seasons (1–21) · Playlist 3–21
+```
 
 ### Sequential fallback
 
@@ -454,10 +534,27 @@ and the propagated virtual targets under:
 /mnt/youtubarr/movies
 ```
 
-Recommended roots:
+A single broad Sonarr root can be used:
 
 ```text
-Sonarr: /youtube-library/tv
+/youtube-library/tv
+```
+
+or the library can be split into Sonarr roots/categories such as:
+
+```text
+/youtube-library/tv/kids
+/youtube-library/tv/shows
+/youtube-library/tv/bbc
+/youtube-library/tv/amazon
+/youtube-library/tv/appletv
+```
+
+Using separate roots allows **Change Location** to move a show between categories directly from Youtubarr.
+
+Recommended music/movie roots:
+
+```text
 Lidarr: /youtube-library/music
 Radarr: /youtube-library/movies
 ```
