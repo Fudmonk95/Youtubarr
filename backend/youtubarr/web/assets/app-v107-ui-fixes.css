@@ -1,0 +1,26 @@
+.arr-poster{position:relative}
+.poster-progress-track{position:absolute;left:0;right:0;bottom:0;height:7px;background:#d9dde2;border-top:1px solid rgba(0,0,0,.12);z-index:4;overflow:hidden}
+.poster-progress-track.no-data{display:none}
+.poster-progress-fill{height:100%;background:var(--yt);transition:width .2s ease}
+.poster-progress-fill.complete{background:var(--yt)}
+.poster-progress-label{margin-top:2px;font-size:9px!important;color:#747a82!important}
+.poster-progress-label.complete{font-weight:700;color:#3c7d49!important}
+
+.season-panel-progress{overflow:hidden}
+.season-head-progress{min-height:46px;height:auto;padding:7px 12px}
+.season-title-block{display:flex;align-items:center;gap:9px}
+.season-title-block strong{font-size:14px}
+.season-count{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:20px;padding:0 7px;border-radius:2px;background:#ef5b5b;color:#fff;font-size:10px;font-weight:700}
+.season-count.complete{background:var(--ok)}
+.season-head-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+.season-playlist-search{display:flex;align-items:center;gap:5px}
+.season-playlist-search svg{width:14px;height:14px}
+.season-progress-track{height:8px!important;background:#d9dde2!important;border:0!important;border-top:1px solid #cdd1d6!important;border-bottom:1px solid #cdd1d6!important;overflow:hidden}
+.season-progress-fill{height:100%;background:var(--yt)!important;transition:width .2s ease}
+.season-progress-fill.complete{background:var(--ok)!important}
+
+/* v1.0.7 removes the old monitored corner from poster cards; progress is now explicit. */
+.arr-poster-card .corner{display:none!important}
+
+/* Only one Arr toolbar popover is allowed to be visible at a time. */
+.tool-menu{z-index:80}
