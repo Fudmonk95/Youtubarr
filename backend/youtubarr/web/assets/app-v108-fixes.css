@@ -1,0 +1,11 @@
+/* Youtubarr v1.0.8 */
+
+/* Complete media should read as healthy/finished, not as YouTube-red missing work. */
+.poster-progress-fill.complete,
+.season-progress-fill.complete {
+  background: var(--ok) !important;
+}
+
+.playlist-mapping-notice {
+  margin: 10px 0 12px;
+}
