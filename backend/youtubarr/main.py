@@ -450,6 +450,10 @@ def calendar(start: str, end: str, _: User = Depends(_auth)) -> list[dict]:
     return output
 
 
+from .series_location import router as series_location_router
+app.include_router(series_location_router)
+
+
 web_dir = settings.web_dir
 app.mount("/assets", StaticFiles(directory=web_dir / "assets"), name="assets")
 
